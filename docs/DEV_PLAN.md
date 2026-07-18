@@ -179,3 +179,11 @@ module must never reference back up into VTC or persona-specific concepts.
 - AgentDock module architecture decisions (sidecar-per-module, MCP over HTTP, entitlement via
   running container, module contract/manifest shape): tracked separately at the VTC/AgentDock
   level, not duplicated here.
+- [agentic_guidance.xml](agentic_guidance.xml) — Atom feed export of the *Agentic Thinking*
+  blog (agenticthinking.ai), covering agent personas, MCP tool design, tool composability, and
+  the standards that make agent tools/agents usable. Consult it when designing this module's
+  actual tools (Phase 2 onward) and the MCP adapter (Phase 3) for applicable patterns —
+  particularly method-safety/reversibility gating for any write-capable command, and
+  composability conventions consistent with this plan's own piping principles above. It's a
+  reference corpus, not something to read end to end each session — grep/search it for the
+  topic at hand.
