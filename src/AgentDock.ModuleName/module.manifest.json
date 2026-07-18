@@ -1,0 +1,12 @@
+{
+  "id": "module-name",
+  "name": "ModuleName",
+  "version": "0.1.0",
+  "description": "One-line description of what this module does.",
+  "tools": [
+    {
+      "name": "echo",
+      "description": "Replace with a real tool description once ExampleTool is replaced."
+    }
+  ]
+}
