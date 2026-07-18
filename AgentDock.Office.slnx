@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/AgentDock.Office/AgentDock.Office.csproj" />
+    <Project Path="src/AgentDock.Office.Cli/AgentDock.Office.Cli.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AgentDock.Office.Tests/AgentDock.Office.Tests.csproj" />
