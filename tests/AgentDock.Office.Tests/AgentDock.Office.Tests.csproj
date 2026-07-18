@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\AgentDock.ModuleName\AgentDock.ModuleName.csproj" />
+    <ProjectReference Include="..\..\src\AgentDock.Office\AgentDock.Office.csproj" />
   </ItemGroup>
 
   <ItemGroup>

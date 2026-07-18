@@ -1,7 +1,10 @@
-# agentdock-module-template
+# agentdock-office
 
-A GitHub template repository for AgentDock capability modules — sidecar services that expose
-tools to VTC (Virtual Team Chat) over MCP.
+The Office capability module for AgentDock — a sidecar service that exposes Office-document
+tools to VTC (Virtual Team Chat) over MCP. See [`docs/DEV_PLAN.md`](docs/DEV_PLAN.md) for
+scope and phase plan (not yet filled in beyond the template).
+
+Scaffolded from [`agentdock-module-template`](https://github.com/greenflagsoftware/agentdock-module-template).
 
 ## What a module is
 
@@ -11,21 +14,13 @@ VTC connects to entitled modules' MCP endpoints and merges their tools into its 
 list. A module is "licensed" simply by whether its container is running — there is no separate
 entitlement check inside the module itself.
 
-## Creating a new module from this template
+## Next steps
 
-1. `gh repo create your-org/agentdock-<module> --template your-org/agentdock-module-template`
-2. Find-and-replace `ModuleName` → your module's PascalCase name (e.g. `Docs`) and
-   `module-name` → its kebab-case id (e.g. `docs`) across the repo. That covers:
-   - `AgentDock.ModuleName.slnx` → rename the file itself too
-   - `src/AgentDock.ModuleName/` → rename the folder and `.csproj`
-   - `tests/AgentDock.ModuleName.Tests/` → rename the folder and `.csproj`
-   - `module.manifest.json` (`id`, `name` fields)
-   - `Dockerfile`, `docker-compose.yml`, `README.md`, `docs/DEV_PLAN.md`
-3. Delete [`ExampleTool.cs`](src/AgentDock.ModuleName/Tools/ExampleTool.cs) once you've added a
-   real tool and confirmed the MCP endpoint round-trips end to end.
-4. Fill in [`docs/DEV_PLAN.md`](docs/DEV_PLAN.md) with what this module actually does.
-5. Update `module.manifest.json`'s `tools` array to match the real tool set as you build it —
-   this is a temporary duplication of the tool contract until a shared contract package exists.
+- Fill in [`docs/DEV_PLAN.md`](docs/DEV_PLAN.md) with what this module actually does.
+- Delete [`ExampleTool.cs`](src/AgentDock.Office/Tools/ExampleTool.cs) once a real tool exists
+  and the MCP endpoint has been confirmed to round-trip end to end.
+- Update `module.manifest.json`'s `tools` array to match the real tool set as you build it —
+  this is a temporary duplication of the tool contract until a shared contract package exists.
 
 ## Local development
 
@@ -39,11 +34,11 @@ curl http://localhost:8081/health
 ## Layout
 
 ```
-src/AgentDock.ModuleName/       ASP.NET Core MCP server (the module itself)
+src/AgentDock.Office/       ASP.NET Core MCP server (the module itself)
   Tools/                        Tool implementations, one file per tool or tool group
   Program.cs                    MCP HTTP transport + /health + /manifest wiring
   module.manifest.json          Declared tool contract (id, name, version, tools)
-tests/AgentDock.ModuleName.Tests/
+tests/AgentDock.Office.Tests/
 docs/DEV_PLAN.md                Phase-by-phase plan for this module
 Dockerfile                      Sidecar container build
 docker-compose.yml              Standalone local run, for testing the module in isolation

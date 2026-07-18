@@ -1,6 +1,6 @@
 {
-  "id": "module-name",
-  "name": "ModuleName",
+  "id": "office",
+  "name": "Office",
   "version": "0.1.0",
   "description": "One-line description of what this module does.",
   "tools": [

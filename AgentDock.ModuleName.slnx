@@ -1,8 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/AgentDock.ModuleName/AgentDock.ModuleName.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/AgentDock.ModuleName.Tests/AgentDock.ModuleName.Tests.csproj" />
-  </Folder>
-</Solution>

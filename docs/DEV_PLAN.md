@@ -1,4 +1,4 @@
-# ModuleName Development Plan
+# Office Development Plan
 
 Status: living document. Update as phases complete or the plan changes — this is not a
 one-time artifact.
@@ -26,14 +26,14 @@ confirmation/scoping treatment called out in the AgentDock architecture decision
 ### Phase 0 — Prove the loop
 
 - Deliverable: the MCP HTTP endpoint responds and VTC can connect to it and call the
-  placeholder `echo` tool in [ExampleTool.cs](../src/AgentDock.ModuleName/Tools/ExampleTool.cs).
+  placeholder `echo` tool in [ExampleTool.cs](../src/AgentDock.Office/Tools/ExampleTool.cs).
 - Exit criteria: `docker compose up` starts the module, `/health` returns healthy, and a
   manual MCP client call to `echo` round-trips.
 
 ### Phase 1 — First real tool
 
 - Deliverable: replace `ExampleTool` with the module's actual first capability.
-- Update [module.manifest.json](../src/AgentDock.ModuleName/module.manifest.json) to describe
+- Update [module.manifest.json](../src/AgentDock.Office/module.manifest.json) to describe
   the real tool set instead of the placeholder.
 - Exit criteria: VTC can call the real tool end to end through a persona.
 
