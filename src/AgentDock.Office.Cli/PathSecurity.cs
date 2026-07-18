@@ -20,6 +20,17 @@ internal static class PathSecurity
     }
 
     /// <summary>
+    /// Resolves the effective root from a command-line <c>--root</c> override or
+    /// the default. Simplifies the pattern used in every command handler.
+    /// </summary>
+    public static string EffectiveRoot(string rootOverride)
+    {
+        return !string.IsNullOrWhiteSpace(rootOverride)
+            ? Path.GetFullPath(rootOverride)
+            : ResolveRoot();
+    }
+
+    /// <summary>
     /// Resolves <paramref name="userPath"/> (which may be relative or absolute)
     /// against <paramref name="root"/> and returns the canonical full path — but
     /// only if it lies within <paramref name="root"/>. Throws <see cref="UnauthorizedAccessException"/>

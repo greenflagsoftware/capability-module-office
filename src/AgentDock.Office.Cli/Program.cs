@@ -12,6 +12,7 @@ public static class Program
             new ReadCommand().Command(),
             new WriteCommand().Command(),
             new ListCommand().Command(),
+            new DocxCommand().Command(),
         };
 
         rootCommand.SetHandler(() =>

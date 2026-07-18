@@ -24,10 +24,7 @@ internal sealed class WriteCommand
         {
             try
             {
-                var root = !string.IsNullOrWhiteSpace(rootOverride)
-                    ? Path.GetFullPath(rootOverride)
-                    : PathSecurity.ResolveRoot();
-
+                var root = PathSecurity.EffectiveRoot(rootOverride);
                 var fullPath = PathSecurity.ResolveWithinRoot(root, path);
 
                 // Determine write mode

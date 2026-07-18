@@ -19,10 +19,7 @@ internal sealed class ReadCommand
         {
             try
             {
-                var root = !string.IsNullOrWhiteSpace(rootOverride)
-                    ? Path.GetFullPath(rootOverride)
-                    : PathSecurity.ResolveRoot();
-
+                var root = PathSecurity.EffectiveRoot(rootOverride);
                 var fullPath = PathSecurity.ResolveWithinRoot(root, path);
 
                 if (!File.Exists(fullPath))
