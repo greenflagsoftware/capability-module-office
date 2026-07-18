@@ -13,11 +13,28 @@
 
 ### Phase 2 — docx capability (verified)
 - `docx create`, `docx read`, `docx info` via DocumentFormat.OpenXml v3.5.1
+- `DocxEngine.GetInfo` throws `InvalidDataException` on a document with no body — it used to
+  fold `["error"] = "..."` into the JSON payload on a 200-equivalent exit code, which violated
+  the CLI's own error contract (errors surface via exit code/stderr, never in the JSON payload).
+  Fixed; covered by `DocxEngineTests.GetInfo_DocumentWithNoBody_ThrowsInsteadOfReturningErrorInPayload`.
 
 ### Phase 3 — MCP adapter (verified)
 - `CliRunner` shells out to CLI binary; `DocxTools` MCP tools call CLI
 - Docker publishes both projects side-by-side; `/data` writable root
 - All three tools round-trip end-to-end
+- MCP transport is **stateless** (`Program.cs` — `options.Stateless = true`), per CLAUDE.md's
+  architecture decision (VTC connects fresh per call; sidecar can scale/restart independently).
+  A later commit briefly flipped this to stateful to ease MCP Inspector testing — that
+  contradicted CLAUDE.md and was reverted. Stateless mode works fine for `tools/list`/
+  `tools/call` with no session handshake required — verified against the built container.
+  Don't flip this again without revisiting CLAUDE.md.
+- `DocxTools`/`CliRunner` pass arguments via `ProcessStartInfo.ArgumentList`, not a manually
+  escaped command-line string. An earlier version built one big string with hand-rolled
+  backslash/quote escaping (`EscapeArg`) that unconditionally doubled every backslash — this
+  corrupted any content/title/path containing a literal backslash (Windows paths, UNC shares,
+  regex, etc.). Confirmed by round-tripping such content through the live container before the
+  fix. `ArgumentList` avoids manual escaping entirely; don't reintroduce a hand-built arguments
+  string here.
 
 ### Phase 4 — Harden (verified)
 
@@ -35,7 +52,9 @@
 - [x] Resource limits/timeouts applied at both CLI invocation (30s default) and MCP adapter layer
 - [x] Bad input produces clear, predictable error surfaced to calling persona
 
-### Test coverage (21 tests, all passing)
+### Test coverage (37 tests, all passing, across two projects)
+
+`tests/AgentDock.Office.Tests/` (21 tests) — MCP adapter layer, subprocess integration:
 
 | Area | Tests |
 |---|---|
@@ -51,19 +70,49 @@
 | Exception types | CliTool/CliTimeout/CliMalformedOutput property validation |
 | Input validation | Null/empty/whitespace path — ArgumentException for all 3 tools |
 
+`tests/AgentDock.Office.Cli.Tests/` (16 tests, added after the Phase 4 gap review) — direct
+unit tests against `PathSecurity` and `DocxEngine` internals (via `InternalsVisibleTo`):
+
+| Area | Tests |
+|---|---|
+| Path resolution | Relative, nested, `.` (root itself) |
+| Path traversal | `../`, deep `../../`, absolute path outside root — all throw |
+| Leading-slash regression | `/foo` and `///foo` treated as relative, not a root override (the bug fixed in `cdfe4ad`) |
+| Prefix-confusion guard | Sibling dir sharing root's string prefix (`root-evil`) is still rejected |
+| Root resolution | `EffectiveRoot` override vs. env-var/cwd fallback |
+| Docx round-trip | Create → ReadText preserves title/content, including literal backslashes |
+| Docx metadata | GetInfo paragraph/word counts match real content |
+| Docx error contract | GetInfo on a body-less document throws `InvalidDataException`, doesn't fold an error into JSON |
+
 ### Project structure
 
 ```
 src/
-├── AgentDock.Office/                       MCP HTTP server
+├── AgentDock.Office/                       MCP HTTP server (stateless transport)
 │   ├── Program.cs
-│   ├── CliRunner.cs                        Hardened subprocess runner (timeout, cancellation, typed exceptions)
+│   ├── CliRunner.cs                        Hardened subprocess runner (timeout, cancellation,
+│   │                                        typed exceptions, ArgumentList-based invocation)
 │   ├── CliToolException.cs                 Typed exceptions: CliToolException, CliTimeoutException, CliMalformedOutputException
 │   ├── module.manifest.json
 │   └── Tools/
-│       └── DocxTools.cs                    Hardened MCP tools (input validation, malformed JSON, failure wrapping)
-└── AgentDock.Office.Cli/                   CLI project (unchanged from Phase 2)
+│       └── DocxTools.cs                    Hardened MCP tools (input validation, malformed JSON,
+│                                            failure wrapping, arg-list building — no manual escaping)
+└── AgentDock.Office.Cli/                   CLI project (DocxEngine.GetInfo now throws on
+    │                                        no-body docs instead of embedding an error in JSON)
     ├── Program.cs, PathSecurity.cs, DocxEngine.cs
     └── Commands/
         ├── DocxCommand.cs, ListCommand.cs, ReadCommand.cs, WriteCommand.cs, SharedOptions.cs
+
+tests/
+├── AgentDock.Office.Tests/                 MCP adapter layer (21 tests)
+└── AgentDock.Office.Cli.Tests/             CLI layer — PathSecurity, DocxEngine (16 tests)
 ```
+
+### Gap review (post-Phase-4)
+
+A follow-up review against `DEV_PLAN.md`'s exit criteria (done by rebuilding the container and
+exercising every tool live, not just reading code) found and fixed: the stateful-transport
+regression, the argument-escaping content-corruption bug, and the GetInfo error-contract
+violation, all documented above. It also updated `DEV_PLAN.md`'s exit-criteria checkboxes
+(previously all unchecked despite the work being done), `README.md`, and `CLAUDE.md`, which had
+drifted stale (dangling references to the deleted `ExampleTool.cs`/`ExampleToolTests`).

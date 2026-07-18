@@ -3,10 +3,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddMcpServer()
     .WithHttpTransport(options =>
     {
-        // Streamable HTTP (the default transport) requires stateful sessions.
-        // Stateless mode is supported but breaks Inspector and some MCP clients
-        // that rely on the Streamable HTTP protocol.
-        options.Stateless = false;
+        // Stateless deliberately: VTC connects fresh per tool call rather than
+        // holding a session open, so the sidecar can scale or restart
+        // independently. Don't flip this without revisiting that architecture
+        // decision (see CLAUDE.md).
+        options.Stateless = true;
     })
     .WithToolsFromAssembly();
 

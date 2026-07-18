@@ -5,5 +5,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AgentDock.Office.Tests/AgentDock.Office.Tests.csproj" />
+    <Project Path="tests/AgentDock.Office.Cli.Tests/AgentDock.Office.Cli.Tests.csproj" />
   </Folder>
 </Solution>

@@ -59,6 +59,23 @@ internal static class CliRunner
     }
 
     /// <summary>
+    /// Runs the CLI with individually-passed arguments (no manual quoting/escaping
+    /// required — each element is passed through as its own argv entry via
+    /// <see cref="ProcessStartInfo.ArgumentList"/>). Prefer this overload whenever
+    /// any argument value comes from user-controlled content, since building a
+    /// single escaped command-line string is error-prone for values containing
+    /// backslashes or quotes.
+    /// </summary>
+    public static async Task<string> RunAsync(IReadOnlyList<string> arguments, TimeSpan? timeout = null)
+    {
+        var cliPath = ResolveCliPath();
+        var effectiveTimeout = timeout ?? DefaultTimeout;
+
+        using var cts = new CancellationTokenSource(effectiveTimeout);
+        return await RunAsync(cliPath, arguments, effectiveTimeout, cts.Token);
+    }
+
+    /// <summary>
     /// Runs the CLI with the given arguments, cancellation token, and timeout.
     /// </summary>
     internal static async Task<string> RunAsync(
@@ -78,6 +95,39 @@ internal static class CliRunner
             EnableRaisingEvents = true,
         };
 
+        return await RunProcessAsync(process, cliPath, arguments, timeout, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the CLI with a pre-split argument list, cancellation token, and timeout.
+    /// </summary>
+    internal static async Task<string> RunAsync(
+        string cliPath, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = cliPath,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            },
+            EnableRaisingEvents = true,
+        };
+
+        foreach (var arg in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(arg);
+        }
+
+        return await RunProcessAsync(process, cliPath, string.Join(' ', arguments), timeout, cancellationToken);
+    }
+
+    private static async Task<string> RunProcessAsync(
+        Process process, string cliPath, string arguments, TimeSpan timeout, CancellationToken cancellationToken)
+    {
         process.Start();
 
         try

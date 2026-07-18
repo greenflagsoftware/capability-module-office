@@ -78,8 +78,8 @@ internal static class DocxEngine
     }
 
     /// <summary>
-    /// Returns metadata about a .docx document: page count, paragraph count,
-    /// word count, and character count.
+    /// Returns metadata about a .docx document: paragraph count, word count,
+    /// and character count.
     /// </summary>
     public static Dictionary<string, object?> GetInfo(string filePath)
     {
@@ -88,13 +88,10 @@ internal static class DocxEngine
 
         if (part?.Document?.Body is not Body body)
         {
-            return new Dictionary<string, object?>
-            {
-                ["paragraphCount"] = 0,
-                ["wordCount"] = 0,
-                ["charCount"] = 0,
-                ["error"] = "document body is empty",
-            };
+            // Errors surface via exit code/stderr per the CLI contract (DEV_PLAN.md) —
+            // never folded into the JSON payload. The caller (DocxCommand) catches this
+            // and exits non-zero.
+            throw new InvalidDataException($"'{filePath}' has no document body (malformed or empty .docx).");
         }
 
         var paragraphs = body.Elements<Paragraph>().ToList();

@@ -102,11 +102,12 @@ module must never reference back up into VTC or persona-specific concepts.
   this phase only proves the "operating system" skeleton: a command comes in, gets routed, and
   produces output.
 - Exit criteria:
-  - [ ] CLI builds standalone with `dotnet build`
-  - [ ] `dotnet run --project <cli-project> -- --help` prints help text and exits 0
-  - [ ] `dotnet run --project <cli-project> -- --version` prints a version and exits 0
-  - [ ] at least one placeholder command routes correctly and produces output
-  - [ ] an unrecognized command returns a non-zero exit code with a clear error (not a crash)
+  - [x] CLI builds standalone with `dotnet build`
+  - [x] `dotnet run --project <cli-project> -- --help` prints help text and exits 0
+  - [x] `dotnet run --project <cli-project> -- --version` prints a version and exits 0
+  - [x] at least one placeholder command routes correctly and produces output (now superseded
+    by the real `read`/`write`/`list`/`docx` commands below)
+  - [x] an unrecognized command returns a non-zero exit code with a clear error (not a crash)
 
 ### Phase 1 — Filesystem primitives
 
@@ -122,27 +123,35 @@ module must never reference back up into VTC or persona-specific concepts.
 - Not yet Office-document-aware — these are generic file primitives (bytes/text in, bytes/text
   out, directory entries listed), not docx/xlsx parsing. That comes in the next phase.
 - Exit criteria:
-  - [ ] `read` returns the contents of an existing text file within the restricted root
-  - [ ] `write` creates a new text file within the restricted root
-  - [ ] `write` overwrites an existing text file within the restricted root
-  - [ ] `write` appends to an existing text file within the restricted root
-  - [ ] `list` returns directory entries (including paths) for a directory within the
+  - [x] `read` returns the contents of an existing text file within the restricted root
+  - [x] `write` creates a new text file within the restricted root
+  - [x] `write` overwrites an existing text file within the restricted root
+  - [x] `write` appends to an existing text file within the restricted root
+  - [x] `list` returns directory entries (including paths) for a directory within the
     restricted root
-  - [ ] all three commands emit machine-readable (JSON) output on stdout
-  - [ ] `read`, `write`, and `list` each reject a path that traverses outside the restricted
-    root, with a non-zero exit code
-  - [ ] each command surfaces errors via exit code/stderr, not folded into the JSON payload
+  - [x] all three commands emit machine-readable (JSON) output on stdout
+  - [x] `read`, `write`, and `list` each reject a path that traverses outside the restricted
+    root, with a non-zero exit code — covered by unit tests in
+    `tests/AgentDock.Office.Cli.Tests/PathSecurityTests.cs`, including a regression test for
+    the leading-slash bug fixed in a later commit
+  - [x] each command surfaces errors via exit code/stderr, not folded into the JSON payload
 
 ### Phase 2 — First real Office capability
 
 - Deliverable: one real, end-to-end Office capability implemented as a CLI command, built on
   top of the Phase 1 filesystem primitives (file type/capability TBD — not yet decided). Still
   no MCP involvement.
+- Decided: .docx (Word), via `DocumentFormat.OpenXml`. `docx read` extracts plain text,
+  `docx create` builds a new document with a title heading and body paragraphs, `docx info`
+  returns paragraph/word/character counts.
 - Exit criteria:
-  - [ ] the file type/capability for this phase has been decided (currently TBD)
-  - [ ] the command runs standalone against a real input file of that type
-  - [ ] the command produces correct output for that real input
-  - [ ] errors surface via exit code/stderr, consistent with the Phase 0/1 CLI contract
+  - [x] the file type/capability for this phase has been decided — .docx
+  - [x] the command runs standalone against a real input file of that type
+  - [x] the command produces correct output for that real input — covered by
+    `tests/AgentDock.Office.Cli.Tests/DocxEngineTests.cs`
+  - [x] errors surface via exit code/stderr, consistent with the Phase 0/1 CLI contract
+    (`docx info` on a document with no body throws rather than folding an `"error"` key into
+    the JSON payload — fixed after an initial version violated this)
 
 ### Phase 3 — MCP adapter
 
@@ -152,12 +161,21 @@ module must never reference back up into VTC or persona-specific concepts.
 - Update [module.manifest.json](../src/AgentDock.Office/module.manifest.json) to describe the
   real tool set instead of the placeholder.
 - Exit criteria:
-  - [ ] `docker compose up --build` starts the module successfully
-  - [ ] `/health` returns healthy
-  - [ ] `module.manifest.json` describes the real tool set, not the `echo` placeholder
-  - [ ] `ExampleTool.cs`/`echo` has been removed
-  - [ ] VTC (or a manual MCP client) can call the real tool and get correct output end to end
-    through the CLI subprocess
+  - [x] `docker compose up --build` starts the module successfully
+  - [x] `/health` returns healthy
+  - [x] `module.manifest.json` describes the real tool set, not the `echo` placeholder
+  - [x] `ExampleTool.cs`/`echo` has been removed
+  - [x] VTC (or a manual MCP client) can call the real tool and get correct output end to end
+    through the CLI subprocess — verified against the built container via `mcp-test.mjs` and
+    raw MCP requests (`docx_create` / `docx_read` / `docx_info` round-trip correctly, including
+    content containing backslashes, which an earlier argument-escaping bug had corrupted)
+
+**Note on transport mode:** an intermediate commit switched `Program.cs` to
+`options.Stateless = false` to make manual testing via MCP Inspector easier. That contradicted
+the stateless architecture decision recorded in `CLAUDE.md` (VTC connects fresh per call; no
+server-side session state) and was reverted back to `Stateless = true`. Stateless mode works
+fine for `tools/list`/`tools/call` without any session handshake — verified directly against
+the running container.
 
 ### Phase 4 — Harden
 
@@ -166,13 +184,25 @@ module must never reference back up into VTC or persona-specific concepts.
 - Resource limits / timeouts appropriate to what the module does, applied at both the CLI
   invocation and the MCP adapter layer.
 - Exit criteria:
-  - [ ] known failure modes for this module's external dependencies are documented and handled
-  - [ ] a non-zero CLI exit code is surfaced as a clear MCP tool-call failure, not a crash
-  - [ ] a CLI subprocess timeout is handled without hanging the sidecar
-  - [ ] malformed/unexpected CLI stdout is handled without crashing the MCP adapter
-  - [ ] resource limits/timeouts are applied at both the CLI invocation and the MCP adapter
-    layer
-  - [ ] bad input produces a clear, predictable error surfaced to the calling persona
+  - [x] known failure modes for this module's external dependencies are documented and handled
+    (CLI binary missing, non-zero exit, timeout, malformed/empty stdout — see `CliRunner.cs`
+    and `CliToolException.cs`)
+  - [x] a non-zero CLI exit code is surfaced as a clear MCP tool-call failure, not a crash
+  - [x] a CLI subprocess timeout is handled without hanging the sidecar (process killed,
+    `CliTimeoutException` thrown)
+  - [x] malformed/unexpected CLI stdout is handled without crashing the MCP adapter
+  - [x] resource limits/timeouts are applied at both the CLI invocation (30s default) and the
+    MCP adapter layer
+  - [x] bad input produces a clear, predictable error surfaced to the calling persona
+    (`ArgumentException` for null/empty/whitespace paths)
+
+**Note on argument passing:** the original Phase 3/4 implementation built CLI arguments as a
+single manually-escaped string (`DocxTools.EscapeArg`), which unconditionally doubled every
+backslash rather than only ones preceding an embedded quote. This corrupted any document
+content/title/path containing a literal backslash (Windows paths, UNC shares, regex, etc.) —
+confirmed by round-tripping such content through the live container before the fix. Fixed by
+switching `CliRunner`/`DocxTools` to build a `ProcessStartInfo.ArgumentList` instead of a hand-
+escaped string, which sidesteps manual escaping entirely.
 
 ## Reference
 

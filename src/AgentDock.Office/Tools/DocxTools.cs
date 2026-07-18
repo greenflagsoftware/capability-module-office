@@ -25,23 +25,25 @@ public static class DocxTools
     }
 
     /// <summary>
-    /// Escapes a single argument value for the command line.
+    /// Builds the full CLI argument list for a docx subcommand, appending
+    /// --root only if the configured root differs from the CLI's default.
+    /// Each element is passed through as its own argv entry (no manual
+    /// quoting/escaping) so content containing backslashes or quotes round-trips
+    /// intact — see <see cref="CliRunner.RunAsync(IReadOnlyList{string}, TimeSpan?)"/>.
     /// </summary>
-    private static string EscapeArg(string value)
+    private static List<string> BuildArgs(params string[] baseArgs)
     {
-        return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
-    }
+        var args = new List<string>(baseArgs);
 
-    /// <summary>
-    /// Builds a --root argument if the configured root is not the default.
-    /// </summary>
-    private static string RootArg()
-    {
         var root = ResolveRoot();
         var cwd = Directory.GetCurrentDirectory();
-        return string.Equals(root, cwd, StringComparison.OrdinalIgnoreCase)
-            ? ""
-            : $" --root {EscapeArg(root)}";
+        if (!string.Equals(root, cwd, StringComparison.OrdinalIgnoreCase))
+        {
+            args.Add("--root");
+            args.Add(root);
+        }
+
+        return args;
     }
 
     /// <summary>
@@ -59,7 +61,7 @@ public static class DocxTools
     /// Calls the CLI and parses the JSON result, catching and wrapping
     /// known failure modes (malformed JSON, non-zero exit, timeout).
     /// </summary>
-    private static async Task<JsonDocument> CallCliAsync(string arguments, TimeSpan? timeout = null)
+    private static async Task<JsonDocument> CallCliAsync(IReadOnlyList<string> arguments, TimeSpan? timeout = null)
     {
         string json;
         try
@@ -106,7 +108,7 @@ public static class DocxTools
     {
         ValidatePath(path, nameof(path));
 
-        using var doc = await CallCliAsync($"docx read {EscapeArg(path)}{RootArg()}");
+        using var doc = await CallCliAsync(BuildArgs("docx", "read", path));
         var content = doc.RootElement.TryGetProperty("content", out var c) ? c.GetString() : "";
         return content ?? "";
     }
@@ -119,8 +121,8 @@ public static class DocxTools
     {
         ValidatePath(path, nameof(path));
 
-        using var doc = await CallCliAsync(
-            $"docx create {EscapeArg(path)} --title {EscapeArg(title ?? "Document")} --content {EscapeArg(content ?? "")}{RootArg()}");
+        using var doc = await CallCliAsync(BuildArgs(
+            "docx", "create", path, "--title", title ?? "Document", "--content", content ?? ""));
 
         var resolved = doc.RootElement.TryGetProperty("resolved", out var r) ? r.GetString() : path;
         return $"Created .docx at {resolved}";
@@ -132,7 +134,7 @@ public static class DocxTools
     {
         ValidatePath(path, nameof(path));
 
-        using var doc = await CallCliAsync($"docx info {EscapeArg(path)}{RootArg()}");
+        using var doc = await CallCliAsync(BuildArgs("docx", "info", path));
 
         var root = doc.RootElement;
 
