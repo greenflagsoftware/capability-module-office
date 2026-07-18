@@ -35,11 +35,18 @@ internal static class PathSecurity
     /// against <paramref name="root"/> and returns the canonical full path — but
     /// only if it lies within <paramref name="root"/>. Throws <see cref="UnauthorizedAccessException"/>
     /// if the resolved path escapes the root.
+    ///
+    /// Leading directory separators on userPath are stripped so that
+    /// <c>Path.Combine(root, "/foo")</c> does not discard the root on Unix.
     /// </summary>
     public static string ResolveWithinRoot(string root, string userPath)
     {
         var rootFull = Path.GetFullPath(root);
-        var combined = Path.GetFullPath(Path.Combine(rootFull, userPath));
+
+        // Strip leading separators from userPath so it's treated as relative.
+        // Path.Combine(root, "/foo") returns "/foo" on Unix, discarding the root.
+        var safePath = userPath.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var combined = Path.GetFullPath(Path.Combine(rootFull, safePath));
 
         // The resolved path is allowed only if it equals the root exactly
         // or starts with root + directory separator (i.e. is a child).

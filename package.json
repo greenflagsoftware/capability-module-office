@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "scripts": {
+    "list": "node mcp-test.mjs list",
+    "create": "node mcp-test.mjs create",
+    "read": "node mcp-test.mjs read",
+    "info": "node mcp-test.mjs info"
+  }
+}
