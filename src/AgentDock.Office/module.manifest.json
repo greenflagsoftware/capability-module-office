@@ -2,11 +2,19 @@
   "id": "office",
   "name": "Office",
   "version": "0.1.0",
-  "description": "One-line description of what this module does.",
+  "description": "Office-document tools for AgentDock — read, create, and inspect .docx files on the filesystem.",
   "tools": [
     {
-      "name": "echo",
-      "description": "Replace with a real tool description once ExampleTool is replaced."
+      "name": "docx_read",
+      "description": "Read the plain text content of a .docx file. Returns the extracted text with paragraph breaks preserved."
+    },
+    {
+      "name": "docx_create",
+      "description": "Create a new .docx document from text content, with a styled title heading and body paragraphs."
+    },
+    {
+      "name": "docx_info",
+      "description": "Get metadata about a .docx document: paragraph count, word count, and character count."
     }
   ]
 }

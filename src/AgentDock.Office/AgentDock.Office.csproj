@@ -8,7 +8,37 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="AgentDock.Office.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
   </ItemGroup>
+
+  <!-- Reference the CLI project to trigger its build -->
+  <ItemGroup>
+    <ProjectReference Include="..\AgentDock.Office.Cli\AgentDock.Office.Cli.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- After build, copy the entire CLI output (including dependencies like System.CommandLine) to the MCP server's output directory -->
+  <Target Name="CopyCliOutput" AfterTargets="Build">
+    <MSBuild Projects="..\AgentDock.Office.Cli\AgentDock.Office.Cli.csproj" Targets="Build" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="CliBuildOutput" />
+    </MSBuild>
+    <ItemGroup>
+      <CliFiles Include="$(ProjectDir)..\AgentDock.Office.Cli\bin\$(Configuration)\net10.0\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CliFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- Also copy for publish -->
+  <Target Name="CopyCliOutputForPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <CliFiles Include="$(ProjectDir)..\AgentDock.Office.Cli\bin\$(Configuration)\net10.0\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CliFiles)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

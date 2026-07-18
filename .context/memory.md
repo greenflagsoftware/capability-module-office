@@ -5,6 +5,7 @@
 **Phase 0 — CLI scaffold — COMPLETE**
 **Phase 1 — Filesystem primitives — COMPLETE**
 **Phase 2 — First real Office capability (docx) — COMPLETE**
+**Phase 3 — MCP adapter — COMPLETE**
 
 ### Phase 0 — CLI scaffold (verified)
 
@@ -25,51 +26,51 @@
 - [x] `list` returns directory entries with paths, type, and size for files
 - [x] All three commands emit machine-readable JSON on stdout
 - [x] Path traversal (e.g. `../etc/passwd`) rejected with non-zero exit code (2)
-- [x] Read of non-existent file returns non-zero exit code (1)
-- [x] Write create on existing file returns non-zero exit code (5)
 - [x] Errors surfaced via stderr, not folded into JSON payload
-- [x] Unauthorized/security errors use exit code 2
-- [x] `--root` option overrides the restricted root directory
-- [x] `OFFICE_CLI_ROOT` env var used as default restricted root
+- [x] `OFFICE_CLI_ROOT` env var and `--root` option for scoping
 
 ### Phase 2 — docx capability (verified)
 
-- [x] `docx create <path>` creates a .docx document with title (Heading1) and body paragraphs
-- [x] `docx create` accepts content via `--content` flag and stdin piping
-- [x] `docx read <path>` extracts plain text from a .docx, preserving paragraph breaks
-- [x] `docx info <path>` returns paragraph count, word count, and character count
-- [x] Path traversal protection applies to all docx subcommands (exit code 2)
-- [x] Non-existent file returns exit code 1
-- [x] Existing file on create returns exit code 5
-- [x] Build: 0 warnings, 0 errors
-- [x] Tests: 1/1 passed
-- [x] Full solution builds and tests pass
+- [x] `docx create`, `read`, `info` subcommands using DocumentFormat.OpenXml v3.5.1
+- [x] stdin content piping supported
+- [x] Path traversal rejected; non-existent file / create-existing errors
+
+### Phase 3 — MCP adapter (verified)
+
+- [x] `CliRunner.cs` — shells out to CLI binary as subprocess, captures JSON stdout
+- [x] `DocxTools.cs` — MCP tools (`docx_read`, `docx_create`, `docx_info`) that call CLI
+- [x] `ExampleTool.cs` (placeholder echo) deleted
+- [x] `module.manifest.json` updated with real tool set, removed echo
+- [x] `Dockerfile` builds and publishes both projects; CLI binary sits alongside MCP server
+- [x] `/data` directory created for writable restricted root; `OFFICE_CLI_ROOT=/data` set in container
+- [x] `docker compose up --build` starts the module successfully
+- [x] `/health` returns `{"status":"healthy"}`
+- [x] MCP tool calls round-trip end to end through CLI subprocess inside Docker:
+  - `docx_create` → `Created .docx at /data/...`
+  - `docx_read` → full text content with paragraph breaks
+  - `docx_info` → paragraph, word, character counts
+- [x] Solution builds: 0 warnings, 0 errors
+- [x] Tests: 2/2 passed
 
 ### Project structure
 
 ```
 src/
-├── AgentDock.Office/                       MCP HTTP server (unchanged from scaffold)
+├── AgentDock.Office/                       MCP HTTP server
+│   ├── Program.cs                           Entry point, MCP/health/manifest
+│   ├── CliRunner.cs                         Shells out to CLI binary as subprocess
+│   ├── module.manifest.json                 Tool contract (docx_read/create/info)
+│   └── Tools/
+│       └── DocxTools.cs                     MCP tool methods calling CLI
 └── AgentDock.Office.Cli/                   CLI project
     ├── Program.cs                           Entry point, command routing
     ├── PathSecurity.cs                      Restricted-root sandboxing
-    ├── DocxEngine.cs                        OpenXml operations (read text, create docx, get info)
+    ├── DocxEngine.cs                        OpenXml operations
     └── Commands/
-        ├── SharedOptions.cs                 Shared option definitions (--root)
-        ├── ReadCommand.cs                   read <path>
-        ├── WriteCommand.cs                  write <path> [--mode] [--content] (stdin pipe)
-        ├── ListCommand.cs                   list [<path>]
-        └── DocxCommand.cs                   docx {read|create|info} <path>
+        ├── DocxCommand.cs                   docx {read|create|info}
+        ├── ListCommand.cs, ReadCommand.cs, WriteCommand.cs, SharedOptions.cs
 ```
-
-### Key architectural decisions (from DEV_PLAN.md)
-
-- **CLI-first**: All capability lives in the CLI first; MCP adapter (Phase 3) shells out to the CLI binary.
-- **Restricted root**: All file operations resolve against a configurable base directory (`OFFICE_CLI_ROOT` env var or `--root`). Paths traversing outside are rejected.
-- **JSON output**: All commands emit machine-readable JSON on stdout; errors go to stderr.
-- **Unix composability**: Commands that take text content support stdin piping.
-- **docx via OpenXml**: Uses `DocumentFormat.OpenXml` v3.5.1 for .docx read, create, and metadata.
 
 ## Up Next
 
-**Phase 3 — MCP adapter**: Wire the MCP server (`src/AgentDock.Office`) to shell out to the CLI binary, replacing the `ExampleTool.cs` placeholder `echo` tool with real docx tools. Update `module.manifest.json` accordingly.
+**Phase 4 — Harden**: Error handling for CLI subprocess failures (non-zero exit, timeout, malformed output), resource limits, and timeouts at both the CLI and MCP adapter layers.
