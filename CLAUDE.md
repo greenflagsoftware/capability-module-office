@@ -71,6 +71,8 @@ src/AgentDock.Office/       ASP.NET Core MCP server (the module itself)
   module.manifest.json          Declared tool contract (id, name, version, tools)
 tests/AgentDock.Office.Tests/
 docs/DEV_PLAN.md                Phase-by-phase plan for this module (living doc)
+docs/TODO.md                    Scratch/ephemeral notes — not phase-tracking, prune freely
+docs/agentic_guidance.xml       Reference corpus (blog feed) on agent/MCP tool design patterns
 Dockerfile                      Sidecar container build (non-root, multi-stage)
 docker-compose.yml              Standalone local run, for testing the module in isolation
 ```
