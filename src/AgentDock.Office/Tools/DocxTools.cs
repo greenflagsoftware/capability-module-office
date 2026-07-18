@@ -6,17 +6,15 @@ namespace AgentDock.Office.Tools;
 
 /// <summary>
 /// MCP tools that shell out to the AgentDock.Office.CLI for docx operations.
-/// Each method maps to a CLI subcommand invocation.
+/// Each method maps to a CLI subcommand invocation. Input validation,
+/// timeout handling, and malformed-output recovery are applied per the
+/// Phase 4 hardening requirements.
 /// </summary>
 [McpServerToolType]
 public static class DocxTools
 {
     private static string ResolveRoot()
     {
-        // The MCP server's restricted root is configurable. Defaults to a
-        // "data" directory next to the server binary, but can be overridden
-        // via the OFFICE_CLI_ROOT environment variable (which the CLI reads
-        // directly, so we honour it here too for consistency).
         var env = Environment.GetEnvironmentVariable("OFFICE_CLI_ROOT");
         if (!string.IsNullOrWhiteSpace(env))
             return env;
@@ -27,19 +25,15 @@ public static class DocxTools
     }
 
     /// <summary>
-    /// Escapes a single argument value for the command line so it is safe to
-    /// pass through the shell.
+    /// Escapes a single argument value for the command line.
     /// </summary>
     private static string EscapeArg(string value)
     {
-        // Wrap in double quotes and escape any embedded double quotes and backslashes.
-        // This is a simplified approach that works for the arguments we expect.
         return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
     }
 
     /// <summary>
-    /// Builds a —root argument if the configured root is not the default
-    /// (current directory).
+    /// Builds a --root argument if the configured root is not the default.
     /// </summary>
     private static string RootArg()
     {
@@ -50,13 +44,69 @@ public static class DocxTools
             : $" --root {EscapeArg(root)}";
     }
 
+    /// <summary>
+    /// Validates that a path is non-null, non-empty, and not just whitespace.
+    /// </summary>
+    private static void ValidatePath(string path, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new ArgumentException("Path must not be null or empty.", paramName);
+        }
+    }
+
+    /// <summary>
+    /// Calls the CLI and parses the JSON result, catching and wrapping
+    /// known failure modes (malformed JSON, non-zero exit, timeout).
+    /// </summary>
+    private static async Task<JsonDocument> CallCliAsync(string arguments, TimeSpan? timeout = null)
+    {
+        string json;
+        try
+        {
+            json = await CliRunner.RunAsync(arguments, timeout);
+        }
+        catch (CliToolException ex)
+        {
+            // Re-throw as InvalidOperationException so the MCP framework
+            // surfaces the stderr content, not just a generic error.
+            throw new InvalidOperationException(
+                $"CLI tool call failed. {ex.Message}");
+        }
+        catch (CliTimeoutException)
+        {
+            throw;
+        }
+        catch (FileNotFoundException ex)
+        {
+            throw new InvalidOperationException(
+                $"CLI binary not found: {ex.FileName}. The module may not be deployed correctly.");
+        }
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            throw new InvalidOperationException(
+                "CLI tool produced empty output. This may indicate an internal error.");
+        }
+
+        try
+        {
+            return JsonDocument.Parse(json);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException(
+                $"CLI tool produced malformed JSON output: {ex.Message}. Raw output (first 200 chars): {json[..Math.Min(json.Length, 200)]}");
+        }
+    }
+
     [McpServerTool, Description("Read the plain text content of a .docx file.")]
     public static async Task<string> DocxRead(
         [Description("Path to the .docx file, relative to the restricted root.")] string path)
     {
-        var json = await CliRunner.RunAsync($"docx read {EscapeArg(path)}{RootArg()}");
+        ValidatePath(path, nameof(path));
 
-        using var doc = JsonDocument.Parse(json);
+        using var doc = await CallCliAsync($"docx read {EscapeArg(path)}{RootArg()}");
         var content = doc.RootElement.TryGetProperty("content", out var c) ? c.GetString() : "";
         return content ?? "";
     }
@@ -67,10 +117,11 @@ public static class DocxTools
         [Description("Document title (used as the first heading).")] string title,
         [Description("Text content for the document body.")] string content)
     {
-        var json = await CliRunner.RunAsync(
-            $"docx create {EscapeArg(path)} --title {EscapeArg(title)} --content {EscapeArg(content)}{RootArg()}");
+        ValidatePath(path, nameof(path));
 
-        using var doc = JsonDocument.Parse(json);
+        using var doc = await CallCliAsync(
+            $"docx create {EscapeArg(path)} --title {EscapeArg(title ?? "Document")} --content {EscapeArg(content ?? "")}{RootArg()}");
+
         var resolved = doc.RootElement.TryGetProperty("resolved", out var r) ? r.GetString() : path;
         return $"Created .docx at {resolved}";
     }
@@ -79,10 +130,10 @@ public static class DocxTools
     public static async Task<string> DocxInfo(
         [Description("Path to the .docx file, relative to the restricted root.")] string path)
     {
-        var json = await CliRunner.RunAsync($"docx info {EscapeArg(path)}{RootArg()}");
+        ValidatePath(path, nameof(path));
 
-        // Pretty-print the metadata as a human-readable summary
-        using var doc = JsonDocument.Parse(json);
+        using var doc = await CallCliAsync($"docx info {EscapeArg(path)}{RootArg()}");
+
         var root = doc.RootElement;
 
         var paraCount = root.TryGetProperty("paragraphCount", out var pc) ? pc.GetInt32() : 0;

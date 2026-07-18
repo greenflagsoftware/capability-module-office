@@ -22,4 +22,16 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Copy the CLI binary and its dependencies alongside the test assembly -->
+  <Target Name="CopyCliToTestOutput" AfterTargets="Build">
+    <MSBuild Projects="..\..\src\AgentDock.Office.Cli\AgentDock.Office.Cli.csproj"
+             Targets="Build" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="CliBuildOutput" />
+    </MSBuild>
+    <ItemGroup>
+      <CliFiles Include="$(ProjectDir)..\..\src\AgentDock.Office.Cli\bin\$(Configuration)\net10.0\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CliFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>
