@@ -1,4 +1,4 @@
-const SERVER = process.env.MCP_SERVER || "http://localhost:8081";
+const SERVER = process.env.MCP_SERVER || "http://localhost:8082";
 
 async function mcpCall(method, params = {}) {
   const res = await fetch(SERVER + "/", {

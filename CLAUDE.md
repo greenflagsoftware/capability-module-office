@@ -58,7 +58,7 @@ into MCP:
 dotnet build
 dotnet test
 docker compose up --build
-curl http://localhost:8081/health
+curl http://localhost:8082/health
 ```
 
 Run a single test:
@@ -66,7 +66,7 @@ Run a single test:
 dotnet test --filter "FullyQualifiedName~DocxEngineTests.Create_ThenReadText_RoundTripsTitleAndContent"
 ```
 
-Local docker-compose maps the container's internal port 8080 to host port 8081, and loads
+Local docker-compose maps the container's internal port 8080 to host port 8082, and loads
 `.env` if present (not committed).
 
 ## Layout

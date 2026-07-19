@@ -33,7 +33,7 @@ or removed.
 dotnet build
 dotnet test
 docker compose up --build
-curl http://localhost:8081/health
+curl http://localhost:8082/health
 ```
 
 ## Layout
