@@ -222,18 +222,18 @@ escaped string, which sidesteps manual escaping entirely.
   to reconsider an index — a full-text index amortizes across many searches; a directory walk
   doesn't need one for filenames alone.
 - Exit criteria:
-  - [ ] `search` command added to the CLI, scoped to the restricted root (same `PathSecurity`
+  - [x] `search` command added to the CLI, scoped to the restricted root (same `PathSecurity`
     sandboxing as `read`/`write`/`list`)
-  - [ ] matches by filename/path pattern (substring or glob), recursively under the given
+  - [x] matches by filename/path pattern (substring or glob), recursively under the given
     directory
-  - [ ] JSON output on stdout; each match includes `name`/`path` (and `type`), consistent with
+  - [x] JSON output on stdout; each match includes `name`/`path` (and `type`), consistent with
     `list`'s entry shape
-  - [ ] rejects a path/root that traverses outside the restricted root, with a non-zero exit
+  - [x] rejects a path/root that traverses outside the restricted root, with a non-zero exit
     code (covered by tests alongside existing `PathSecurityTests.cs`)
-  - [ ] errors surface via exit code/stderr, not folded into the JSON payload
-  - [ ] MCP tool wired per Phase 3's pattern (new tool class alongside `DocxTools.cs`),
+  - [x] errors surface via exit code/stderr, not folded into the JSON payload
+  - [x] MCP tool wired per Phase 3's pattern (new tool class alongside `DocxTools.cs`),
     `module.manifest.json` updated
-  - [ ] unit tests under `tests/AgentDock.Office.Cli.Tests/` for the CLI command; MCP-adapter
+  - [x] unit tests under `tests/AgentDock.Office.Cli.Tests/` for the CLI command; MCP-adapter
     tests under `tests/AgentDock.Office.Tests/`
 
 ### Phase 6 — Document editing

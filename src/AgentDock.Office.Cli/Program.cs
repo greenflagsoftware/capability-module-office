@@ -13,6 +13,7 @@ public static class Program
             new WriteCommand().Command(),
             new ListCommand().Command(),
             new DocxCommand().Command(),
+            new SearchCommand().Command(),
         };
 
         rootCommand.SetHandler(() =>

@@ -15,6 +15,10 @@
     {
       "name": "docx_info",
       "description": "Get metadata about a .docx document: paragraph count, word count, and character count."
+    },
+    {
+      "name": "search",
+      "description": "Search for files by name or path pattern within the restricted root, recursively. Supports glob patterns (e.g. *.txt, report*) and substring matching. Returns matching file names, paths, and sizes."
     }
   ]
 }
