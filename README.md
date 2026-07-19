@@ -1,11 +1,11 @@
-# agentdock-office
+# capability-module-office
 
-The Office capability module for AgentDock — a sidecar service that exposes Office-document
-tools to VTC (Virtual Team Chat) over MCP. Every capability is implemented first as a
-standalone CLI (`AgentDock.Office.Cli`); the MCP server is a thin adapter that shells out to it.
-See [`docs/DEV_PLAN.md`](docs/DEV_PLAN.md) for scope and phase plan.
+The Office capability module — a sidecar service that exposes Office-document tools to VTC
+(Virtual Team Chat) over MCP. Every capability is implemented first as a standalone CLI
+(`CapabilityModule.Office.Cli`); the MCP server is a thin adapter that shells out to it. See
+[`docs/DEV_PLAN.md`](docs/DEV_PLAN.md) for scope and phase plan.
 
-Scaffolded from [`agentdock-module-template`](https://github.com/greenflagsoftware/agentdock-module-template).
+Scaffolded from [`capability-module-template`](https://github.com/greenflagsoftware/capability-module-template).
 
 ## What a module is
 
@@ -39,19 +39,19 @@ curl http://localhost:8082/health
 ## Layout
 
 ```
-src/AgentDock.Office/            ASP.NET Core MCP server (thin adapter over the CLI)
-  Tools/                             MCP tool implementations, one file per tool group
-  CliRunner.cs                       Shells out to the CLI subprocess, handles timeouts/errors
-  Program.cs                         MCP HTTP transport + /health + /manifest wiring
-  module.manifest.json               Declared tool contract (id, name, version, tools)
-src/AgentDock.Office.Cli/        Standalone CLI — where the actual capability lives
-  Commands/                          One file per command (read, write, list, docx)
-  PathSecurity.cs                    Restricted-root sandboxing shared by all commands
-  DocxEngine.cs                      OpenXml operations for .docx
-tests/AgentDock.Office.Tests/     Tests for the MCP adapter layer
-tests/AgentDock.Office.Cli.Tests/ Tests for the CLI layer (PathSecurity, DocxEngine)
-docs/DEV_PLAN.md                 Phase-by-phase plan for this module
-docs/TODO.md                     Scratch/ephemeral notes
-Dockerfile                       Sidecar container build (publishes both projects side by side)
-docker-compose.yml               Standalone local run, for testing the module in isolation
+src/CapabilityModule.Office/             ASP.NET Core MCP server (thin adapter over the CLI)
+  Tools/                                 MCP tool implementations, one file per tool group
+  CliRunner.cs                           Shells out to the CLI subprocess, handles timeouts/errors
+  Program.cs                             MCP HTTP transport + /health + /manifest wiring
+  module.manifest.json                   Declared tool contract (id, name, version, tools)
+src/CapabilityModule.Office.Cli/         Standalone CLI — where the actual capability lives
+  Commands/                              One file per command (read, write, list, docx)
+  PathSecurity.cs                        Restricted-root sandboxing shared by all commands
+  DocxEngine.cs                          OpenXml operations for .docx
+tests/CapabilityModule.Office.Tests/     Tests for the MCP adapter layer
+tests/CapabilityModule.Office.Cli.Tests/ Tests for the CLI layer (PathSecurity, DocxEngine)
+docs/DEV_PLAN.md                         Phase-by-phase plan for this module
+docs/TODO.md                             Scratch/ephemeral notes
+Dockerfile                               Sidecar container build (publishes both projects side by side)
+docker-compose.yml                       Standalone local run, for testing the module in isolation
 ```

@@ -1,4 +1,4 @@
-namespace AgentDock.Office.Cli.Tests;
+namespace CapabilityModule.Office.Cli.Tests;
 
 public class PathSecurityTests : IDisposable
 {

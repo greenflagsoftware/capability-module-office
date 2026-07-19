@@ -1,6 +1,6 @@
 using System.CommandLine;
 
-namespace AgentDock.Office.Cli.Commands;
+namespace CapabilityModule.Office.Cli.Commands;
 
 internal sealed class SearchCommand
 {

@@ -1,9 +1,9 @@
 using System.Diagnostics;
 
-namespace AgentDock.Office;
+namespace CapabilityModule.Office;
 
 /// <summary>
-/// Shells out to the AgentDock.Office.Cli binary as a subprocess per the
+/// Shells out to the CapabilityModule.Office.Cli binary as a subprocess per the
 /// CLI-first architecture decision. The MCP adapter layer calls this, reads
 /// the JSON stdout, and adapts it into an MCP tool response.
 ///
@@ -26,18 +26,18 @@ internal static class CliRunner
     {
         var baseDir = AppContext.BaseDirectory;
         var os = OperatingSystem.IsWindows() ? ".exe" : "";
-        var path = Path.Combine(baseDir, "AgentDock.Office.Cli" + os);
+        var path = Path.Combine(baseDir, "CapabilityModule.Office.Cli" + os);
 
         if (!File.Exists(path))
         {
             // Fallback: maybe it's in a subdirectory
-            path = Path.Combine(baseDir, "cli", "AgentDock.Office.Cli" + os);
+            path = Path.Combine(baseDir, "cli", "CapabilityModule.Office.Cli" + os);
         }
 
         if (!File.Exists(path))
         {
             throw new FileNotFoundException(
-                $"CLI binary not found. Looked at: {Path.Combine(baseDir, "AgentDock.Office.Cli" + os)}");
+                $"CLI binary not found. Looked at: {Path.Combine(baseDir, "CapabilityModule.Office.Cli" + os)}");
         }
 
         return path;

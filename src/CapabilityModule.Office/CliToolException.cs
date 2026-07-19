@@ -1,4 +1,4 @@
-namespace AgentDock.Office;
+namespace CapabilityModule.Office;
 
 /// <summary>
 /// Represents a CLI subprocess that completed (did not time out) but exited

@@ -1,4 +1,4 @@
-namespace AgentDock.Office.Cli;
+namespace CapabilityModule.Office.Cli;
 
 internal static class SearchEngine
 {

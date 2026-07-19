@@ -2,7 +2,7 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 
-namespace AgentDock.Office.Cli;
+namespace CapabilityModule.Office.Cli;
 
 /// <summary>
 /// Core OpenXml operations for .docx documents — read text, create documents,

@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>AgentDock.Office.Cli</RootNamespace>
+    <RootNamespace>CapabilityModule.Office.Cli</RootNamespace>
     <Version>0.1.0</Version>
   </PropertyGroup>
 
@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="AgentDock.Office.Cli.Tests" />
+    <InternalsVisibleTo Include="CapabilityModule.Office.Cli.Tests" />
   </ItemGroup>
 
 </Project>

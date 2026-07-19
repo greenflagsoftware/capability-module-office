@@ -1,4 +1,4 @@
-namespace AgentDock.Office.Cli;
+namespace CapabilityModule.Office.Cli;
 
 /// <summary>
 /// Resolves a user-supplied path relative to the restricted root and rejects it

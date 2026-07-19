@@ -2,7 +2,7 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 
-namespace AgentDock.Office.Cli.Tests;
+namespace CapabilityModule.Office.Cli.Tests;
 
 public class DocxEngineTests : IDisposable
 {

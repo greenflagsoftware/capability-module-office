@@ -54,7 +54,7 @@
 
 ### Test coverage (37 tests, all passing, across two projects)
 
-`tests/AgentDock.Office.Tests/` (21 tests) — MCP adapter layer, subprocess integration:
+`tests/CapabilityModule.Office.Tests/` (21 tests) — MCP adapter layer, subprocess integration:
 
 | Area | Tests |
 |---|---|
@@ -70,7 +70,7 @@
 | Exception types | CliTool/CliTimeout/CliMalformedOutput property validation |
 | Input validation | Null/empty/whitespace path — ArgumentException for all 3 tools |
 
-`tests/AgentDock.Office.Cli.Tests/` (16 tests, added after the Phase 4 gap review) — direct
+`tests/CapabilityModule.Office.Cli.Tests/` (16 tests, added after the Phase 4 gap review) — direct
 unit tests against `PathSecurity` and `DocxEngine` internals (via `InternalsVisibleTo`):
 
 | Area | Tests |
@@ -88,7 +88,7 @@ unit tests against `PathSecurity` and `DocxEngine` internals (via `InternalsVisi
 
 ```
 src/
-├── AgentDock.Office/                       MCP HTTP server (stateless transport)
+├── CapabilityModule.Office/                       MCP HTTP server (stateless transport)
 │   ├── Program.cs
 │   ├── CliRunner.cs                        Hardened subprocess runner (timeout, cancellation,
 │   │                                        typed exceptions, ArgumentList-based invocation)
@@ -97,15 +97,15 @@ src/
 │   └── Tools/
 │       └── DocxTools.cs                    Hardened MCP tools (input validation, malformed JSON,
 │                                            failure wrapping, arg-list building — no manual escaping)
-└── AgentDock.Office.Cli/                   CLI project (DocxEngine.GetInfo now throws on
+└── CapabilityModule.Office.Cli/                   CLI project (DocxEngine.GetInfo now throws on
     │                                        no-body docs instead of embedding an error in JSON)
     ├── Program.cs, PathSecurity.cs, DocxEngine.cs
     └── Commands/
         ├── DocxCommand.cs, ListCommand.cs, ReadCommand.cs, WriteCommand.cs, SharedOptions.cs
 
 tests/
-├── AgentDock.Office.Tests/                 MCP adapter layer (21 tests)
-└── AgentDock.Office.Cli.Tests/             CLI layer — PathSecurity, DocxEngine (16 tests)
+├── CapabilityModule.Office.Tests/                 MCP adapter layer (21 tests)
+└── CapabilityModule.Office.Cli.Tests/             CLI layer — PathSecurity, DocxEngine (16 tests)
 ```
 
 ### Gap review (post-Phase-4)

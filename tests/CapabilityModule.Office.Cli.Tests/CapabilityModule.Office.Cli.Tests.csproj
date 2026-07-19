@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <AssemblyName>AgentDock.Office.Cli.Tests</AssemblyName>
+    <AssemblyName>CapabilityModule.Office.Cli.Tests</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\AgentDock.Office.Cli\AgentDock.Office.Cli.csproj" />
+    <ProjectReference Include="..\..\src\CapabilityModule.Office.Cli\CapabilityModule.Office.Cli.csproj" />
   </ItemGroup>
 
   <ItemGroup>

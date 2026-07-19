@@ -3,7 +3,7 @@ using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
-namespace AgentDock.Office.Tools;
+namespace CapabilityModule.Office.Tools;
 
 [McpServerToolType]
 public static class SearchTools

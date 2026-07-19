@@ -3,10 +3,10 @@ using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
-namespace AgentDock.Office.Tools;
+namespace CapabilityModule.Office.Tools;
 
 /// <summary>
-/// MCP tools that shell out to the AgentDock.Office.CLI for docx operations.
+/// MCP tools that shell out to the CapabilityModule.Office.CLI for docx operations.
 /// Each method maps to a CLI subcommand invocation. Input validation,
 /// timeout handling, and malformed-output recovery are applied per the
 /// Phase 4 hardening requirements.

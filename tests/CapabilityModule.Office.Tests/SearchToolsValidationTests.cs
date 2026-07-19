@@ -1,4 +1,4 @@
-namespace AgentDock.Office.Tests;
+namespace CapabilityModule.Office.Tests;
 
 public class SearchToolsValidationTests
 {

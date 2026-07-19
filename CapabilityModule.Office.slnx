@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CapabilityModule.Office/CapabilityModule.Office.csproj" />
+    <Project Path="src/CapabilityModule.Office.Cli/CapabilityModule.Office.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CapabilityModule.Office.Tests/CapabilityModule.Office.Tests.csproj" />
+    <Project Path="tests/CapabilityModule.Office.Cli.Tests/CapabilityModule.Office.Cli.Tests.csproj" />
+  </Folder>
+</Solution>

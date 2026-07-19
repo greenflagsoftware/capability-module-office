@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace AgentDock.Office.Tests;
+namespace CapabilityModule.Office.Tests;
 
 public class CliRunnerTests
 {
@@ -11,7 +11,7 @@ public class CliRunnerTests
 
         Assert.NotNull(path);
         Assert.NotEmpty(path);
-        Assert.Contains("AgentDock.Office.Cli", path, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CapabilityModule.Office.Cli", path, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -24,7 +24,7 @@ public class CliRunnerTests
     public async Task RunAsync_BinaryNotFound_ThrowsWin32Exception()
     {
         var ex = await Assert.ThrowsAsync<Win32Exception>(() =>
-            CliRunner.RunAsync("/nonexistent/path/AgentDock.Office.Cli.exe", "--help",
+            CliRunner.RunAsync("/nonexistent/path/CapabilityModule.Office.Cli.exe", "--help",
                 TimeSpan.FromSeconds(5), CancellationToken.None));
 
         Assert.Contains("trying to start process", ex.Message, StringComparison.OrdinalIgnoreCase);

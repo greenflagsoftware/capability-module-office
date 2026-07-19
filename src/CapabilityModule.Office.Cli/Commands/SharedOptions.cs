@@ -1,6 +1,6 @@
 using System.CommandLine;
 
-namespace AgentDock.Office.Cli.Commands;
+namespace CapabilityModule.Office.Cli.Commands;
 
 /// <summary>
 /// Shared options used across multiple commands — keeps the option definitions

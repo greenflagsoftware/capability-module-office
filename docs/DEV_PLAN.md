@@ -32,11 +32,11 @@ after the CLI proves itself standalone.
 
 ## Architecture notes specific to this module
 
-Most of the shape is already decided at the AgentDock level (see the architecture reference
-below) — only note what's specific to *this* module here: external services it talks to,
-credentials/config it needs, whether it's stateless or backs onto a stateful service, and any
+Most of the shape is already decided at the capability-module level (see the architecture
+reference below) — only note what's specific to *this* module here: external services it talks
+to, credentials/config it needs, whether it's stateless or backs onto a stateful service, and any
 higher-risk capabilities (shell exec, sending messages, financial actions) that need the
-confirmation/scoping treatment called out in the AgentDock architecture decisions.
+confirmation/scoping treatment called out in the capability-module architecture decisions.
 
 **CLI-first architecture.** Unlike the template's default (MCP tool methods holding the logic
 directly), this module's actual capability lives in a standalone .NET C# CLI. The CLI is the
@@ -132,7 +132,7 @@ module must never reference back up into VTC or persona-specific concepts.
   - [x] all three commands emit machine-readable (JSON) output on stdout
   - [x] `read`, `write`, and `list` each reject a path that traverses outside the restricted
     root, with a non-zero exit code — covered by unit tests in
-    `tests/AgentDock.Office.Cli.Tests/PathSecurityTests.cs`, including a regression test for
+    `tests/CapabilityModule.Office.Cli.Tests/PathSecurityTests.cs`, including a regression test for
     the leading-slash bug fixed in a later commit
   - [x] each command surfaces errors via exit code/stderr, not folded into the JSON payload
 
@@ -148,17 +148,17 @@ module must never reference back up into VTC or persona-specific concepts.
   - [x] the file type/capability for this phase has been decided — .docx
   - [x] the command runs standalone against a real input file of that type
   - [x] the command produces correct output for that real input — covered by
-    `tests/AgentDock.Office.Cli.Tests/DocxEngineTests.cs`
+    `tests/CapabilityModule.Office.Cli.Tests/DocxEngineTests.cs`
   - [x] errors surface via exit code/stderr, consistent with the Phase 0/1 CLI contract
     (`docx info` on a document with no body throws rather than folding an `"error"` key into
     the JSON payload — fixed after an initial version violated this)
 
 ### Phase 3 — MCP adapter
 
-- Deliverable: wire the MCP server (`src/AgentDock.Office`) to shell out to the CLI for the
+- Deliverable: wire the MCP server (`src/CapabilityModule.Office`) to shell out to the CLI for the
   capability built in Phase 2, replacing the placeholder `echo` tool in
-  [ExampleTool.cs](../src/AgentDock.Office/Tools/ExampleTool.cs).
-- Update [module.manifest.json](../src/AgentDock.Office/module.manifest.json) to describe the
+  [ExampleTool.cs](../src/CapabilityModule.Office/Tools/ExampleTool.cs).
+- Update [module.manifest.json](../src/CapabilityModule.Office/module.manifest.json) to describe the
   real tool set instead of the placeholder.
 - Exit criteria:
   - [x] `docker compose up --build` starts the module successfully
@@ -233,8 +233,8 @@ escaped string, which sidesteps manual escaping entirely.
   - [x] errors surface via exit code/stderr, not folded into the JSON payload
   - [x] MCP tool wired per Phase 3's pattern (new tool class alongside `DocxTools.cs`),
     `module.manifest.json` updated
-  - [x] unit tests under `tests/AgentDock.Office.Cli.Tests/` for the CLI command; MCP-adapter
-    tests under `tests/AgentDock.Office.Tests/`
+  - [x] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` for the CLI command; MCP-adapter
+    tests under `tests/CapabilityModule.Office.Tests/`
 
 ### Phase 6 — Document editing
 
@@ -286,14 +286,14 @@ escaped string, which sidesteps manual escaping entirely.
   - [ ] errors surface via exit code/stderr, not folded into the JSON payload
   - [ ] MCP tool wired per Phase 3's pattern (alongside `DocxTools.cs`), `module.manifest.json`
     updated
-  - [ ] unit tests under `tests/AgentDock.Office.Cli.Tests/` covering both the substitution and
-    the versioning behavior; MCP-adapter tests under `tests/AgentDock.Office.Tests/`
+  - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering both the substitution and
+    the versioning behavior; MCP-adapter tests under `tests/CapabilityModule.Office.Tests/`
 
 ## Reference
 
-- AgentDock module architecture decisions (sidecar-per-module, MCP over HTTP, entitlement via
-  running container, module contract/manifest shape): tracked separately at the VTC/AgentDock
-  level, not duplicated here.
+- Capability-module architecture decisions (sidecar-per-module, MCP over HTTP, entitlement via
+  running container, module contract/manifest shape): tracked separately at the VTC level, not
+  duplicated here.
 - [agentic_guidance.xml](agentic_guidance.xml) — Atom feed export of the *Agentic Thinking*
   blog (agenticthinking.ai), covering agent personas, MCP tool design, tool composability, and
   the standards that make agent tools/agents usable. Consult it when designing this module's

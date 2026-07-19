@@ -1,13 +1,13 @@
 using System.CommandLine;
-using AgentDock.Office.Cli.Commands;
+using CapabilityModule.Office.Cli.Commands;
 
-namespace AgentDock.Office.Cli;
+namespace CapabilityModule.Office.Cli;
 
 public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        var rootCommand = new RootCommand("AgentDock Office CLI — filesystem and document utilities.")
+        var rootCommand = new RootCommand("Capability Modules Office CLI — filesystem and document utilities.")
         {
             new ReadCommand().Command(),
             new WriteCommand().Command(),

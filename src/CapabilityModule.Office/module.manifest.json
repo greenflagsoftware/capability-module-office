@@ -2,7 +2,7 @@
   "id": "office",
   "name": "Office",
   "version": "0.1.0",
-  "description": "Office-document tools for AgentDock — read, create, and inspect .docx files on the filesystem.",
+  "description": "Office-document tools for capability modules — read, create, and inspect .docx files on the filesystem.",
   "tools": [
     {
       "name": "docx_read",
