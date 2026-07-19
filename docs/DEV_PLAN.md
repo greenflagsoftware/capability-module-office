@@ -365,18 +365,18 @@ escaped string, which sidesteps manual escaping entirely.
 - An unsupported file extension/format produces a clear "no adapter for this format" error
   (non-zero exit) rather than being silently skipped or indexed as empty.
 - Exit criteria:
-  - [ ] `IContentExtractor` (or equivalent) abstraction defined, returning normalized text plus
+  - [x] `IContentExtractor` (or equivalent) abstraction defined, returning normalized text plus
     whatever structure is recoverable for that format
-  - [ ] `.docx` adapter implemented, producing output equivalent to the existing `DocxEngine`
+  - [x] `.docx` adapter implemented, producing output equivalent to the existing `DocxEngine`
     extraction
-  - [ ] plain-text adapter implemented
-  - [ ] PDF adapter implemented, extracting text and page-level structure from PDFs that have an
+  - [x] plain-text adapter implemented
+  - [x] PDF adapter implemented, extracting text and page-level structure from PDFs that have an
     embedded text layer
-  - [ ] an unsupported file extension/format produces a clear non-zero-exit error, not a silent
+  - [x] an unsupported file extension/format produces a clear non-zero-exit error, not a silent
     no-op or empty-content result
-  - [ ] a PDF with zero extractable text (scanned/image-only) is flagged distinctly rather than
+  - [x] a PDF with zero extractable text (scanned/image-only) is flagged distinctly rather than
     silently treated as a successful empty-content extraction
-  - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering each adapter, including a
+  - [x] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering each adapter, including a
     multi-page/multi-heading PDF fixture
 
 ### Phase 9 — Content chunking
