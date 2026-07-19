@@ -46,6 +46,16 @@ internal sealed class SearchCommand
                 Console.Error.WriteLine($"error: {ex.Message}");
                 Environment.Exit(2);
             }
+            catch (IOException)
+            {
+                // Directory.Exists returns false (not an exception) for most malformed
+                // or glob-containing paths, but some path shapes still make the
+                // underlying file APIs throw (e.g. DirectoryNotFoundException) instead —
+                // treat those the same as "not found" rather than leaking a raw
+                // framework message like "Could not find a part of the path '...'".
+                Console.Error.WriteLine($"error: directory not found: {path}");
+                Environment.Exit(1);
+            }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"error: {ex.Message}");
