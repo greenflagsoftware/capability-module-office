@@ -10,13 +10,15 @@ internal sealed class IndexCommand
         var pathArg = new Argument<string>("path", () => ".",
             "Directory to index (relative to the restricted root). Defaults to the root itself.");
         var rootOpt = SharedOptions.RootOption();
+        var embedOpt = new Option<bool>("--embed", () => true,
+            "Generate vector embeddings for chunks. Set to false to skip embedding for cost control.");
 
         var cmd = new Command("index", "Build a search index over documents in the restricted root.")
         {
-            pathArg, rootOpt,
+            pathArg, rootOpt, embedOpt,
         };
 
-        cmd.SetHandler(async (string path, string rootOverride) =>
+        cmd.SetHandler(async (string path, string rootOverride, bool embed) =>
         {
             try
             {
@@ -36,7 +38,22 @@ internal sealed class IndexCommand
                     Environment.Exit(4);
                 }
 
-                var summary = await IndexEngine.BuildIndexAsync(root, fullPath, connectionString);
+                IEmbeddingProvider? embeddingProvider = null;
+                if (embed)
+                {
+                    try
+                    {
+                        embeddingProvider = new OpenAIEmbeddingProvider();
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        // API key not set — warn and continue without embedding
+                        Console.Error.WriteLine($"warning: embedding disabled — {ex.Message}");
+                    }
+                }
+
+                var summary = await IndexEngine.BuildIndexAsync(
+                    root, fullPath, connectionString, embeddingProvider);
 
                 var result = new Dictionary<string, object?>
                 {
@@ -70,7 +87,7 @@ internal sealed class IndexCommand
                 Console.Error.WriteLine($"error: {ex.Message}");
                 Environment.Exit(3);
             }
-        }, pathArg, rootOpt);
+        }, pathArg, rootOpt, embedOpt);
 
         return cmd;
     }

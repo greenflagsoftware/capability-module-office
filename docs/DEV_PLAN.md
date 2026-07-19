@@ -437,16 +437,16 @@ escaped string, which sidesteps manual escaping entirely.
   it into `index build` for a single command unless a reason to separate them emerges (e.g.
   wanting to re-chunk without re-spending on embeddings).
 - Exit criteria:
-  - [ ] `IEmbeddingProvider` (or equivalent) interface defined in the CLI, with the concrete
+  - [x] `IEmbeddingProvider` (or equivalent) interface defined in the CLI, with the concrete
     implementation selected via config rather than hardcoded
-  - [ ] OpenAI `text-embedding-3-small` implemented end to end as the default provider
-  - [ ] API key sourced from config/`.env`, never logged
-  - [ ] chunks lacking a vector are embedded and the `vector` column populated
-  - [ ] re-running against already-embedded, unchanged chunks does not re-embed (cost control)
-  - [ ] embedding failures (provider error, rate limit, timeout) surface via exit code/stderr,
+  - [x] OpenAI `text-embedding-3-small` implemented end to end as the default provider
+  - [x] API key sourced from config/`.env`, never logged
+  - [x] chunks lacking a vector are embedded and the `vector` column populated
+  - [x] re-running against already-embedded, unchanged chunks does not re-embed (cost control)
+  - [x] embedding failures (provider error, rate limit, timeout) surface via exit code/stderr,
     consistent with the CLI's error contract, without corrupting partially-written index state
-  - [ ] JSON output includes counts of chunks embedded vs. skipped
-  - [ ] unit/integration tests covering the skip-already-embedded behavior (provider calls can be
+  - [x] JSON output includes counts of chunks embedded vs. skipped
+  - [x] unit/integration tests covering the skip-already-embedded behavior (provider calls can be
     mocked/stubbed — no requirement to hit the real embedding API in CI)
 
 ### Phase 11 — Semantic + hybrid search

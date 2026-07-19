@@ -1,0 +1,251 @@
+using System.Net;
+using System.Net.Http;
+using System.Text.Json;
+
+namespace CapabilityModule.Office.Cli.Tests;
+
+public class EmbeddingTests
+{
+    // ---------------------------------------------------------------
+    // IEmbeddingProvider interface contract
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void InterfaceExists_AndCanBeImplemented()
+    {
+        // Verify the interface is defined and has the expected method
+        var type = typeof(IEmbeddingProvider);
+        Assert.True(type.IsInterface);
+        var method = type.GetMethod("EmbedAsync");
+        Assert.NotNull(method);
+        Assert.True(typeof(Task).IsAssignableFrom(method!.ReturnType));
+    }
+
+    // ---------------------------------------------------------------
+    // OpenAIEmbeddingProvider tests (with mocked HTTP)
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task OpenAIEmbeddingProvider_EmbedsSingleText()
+    {
+        var handler = new MockHttpHandler(async request =>
+        {
+            var body = await request.Content!.ReadAsStringAsync();
+            Assert.Contains("text-embedding-3-small", body);
+            Assert.Contains("Hello world", body);
+            Assert.Equal("/v1/embeddings", request.RequestUri?.AbsolutePath);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"data":[{"index":0,"embedding":[0.1,0.2,0.3]}]}"""),
+            };
+        });
+
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://api.openai.com/v1/"),
+        };
+        using var provider = new OpenAIEmbeddingProvider(httpClient);
+
+        var result = await provider.EmbedAsync(new[] { "Hello world" });
+
+        Assert.Single(result);
+        Assert.Equal(3, result[0].Span.Length);
+        Assert.Equal(0.1f, result[0].Span[0]);
+        Assert.Equal(0.2f, result[0].Span[1]);
+        Assert.Equal(0.3f, result[0].Span[2]);
+    }
+
+    [Fact]
+    public async Task OpenAIEmbeddingProvider_EmbedsMultipleTexts()
+    {
+        var handler = new MockHttpHandler(async request =>
+        {
+            var body = await request.Content!.ReadAsStringAsync();
+            Assert.Contains("text-one", body);
+            Assert.Contains("text-two", body);
+            Assert.Equal("/v1/embeddings", request.RequestUri?.AbsolutePath);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"data":[{"index":0,"embedding":[1.0]},{"index":1,"embedding":[2.0]}]}"""),
+            };
+        });
+
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://api.openai.com/v1/"),
+        };
+        using var provider = new OpenAIEmbeddingProvider(httpClient);
+
+        var result = await provider.EmbedAsync(new[] { "text-one", "text-two" });
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(1.0f, result[0].Span[0]);
+        Assert.Equal(2.0f, result[1].Span[0]);
+    }
+
+    [Fact]
+    public async Task OpenAIEmbeddingProvider_EmptyInput_ReturnsEmpty()
+    {
+        using var httpClient = new HttpClient(new MockHttpHandler(_ =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[]")
+            })))
+        {
+            BaseAddress = new Uri("https://api.openai.com/v1/"),
+        };
+        using var provider = new OpenAIEmbeddingProvider(httpClient);
+
+        var result = await provider.EmbedAsync(Array.Empty<string>());
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task OpenAIEmbeddingProvider_ApiError_Throws()
+    {
+        var handler = new MockHttpHandler(async _ =>
+            new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                Content = new StringContent("{\"error\":\"invalid_api_key\"}"),
+            });
+
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://api.openai.com/v1/"),
+        };
+        using var provider = new OpenAIEmbeddingProvider(httpClient);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => provider.EmbedAsync(new[] { "test" }));
+        Assert.Contains("Unauthorized", ex.Message);
+        Assert.Contains("invalid_api_key", ex.Message);
+    }
+
+    [Fact]
+    public async Task OpenAIEmbeddingProvider_WrongNumberOfEmbeddings_Throws()
+    {
+        var handler = new MockHttpHandler(async _ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"data":[{"index":0,"embedding":[1.0]},{"index":1,"embedding":[2.0]}]}"""),
+            });
+
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://api.openai.com/v1/"),
+        };
+        using var provider = new OpenAIEmbeddingProvider(httpClient);
+
+        // Request 3 texts but response only has 2 embeddings
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => provider.EmbedAsync(new[] { "a", "b", "c" }));
+        Assert.Contains("unexpected number", ex.Message);
+    }
+
+    [Fact]
+    public void OpenAIEmbeddingProvider_NoApiKey_Throws()
+    {
+        // Clear the env var and verify the constructor throws
+        var existingKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        try
+        {
+            Environment.SetEnvironmentVariable("OPENAI_API_KEY", null);
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => new OpenAIEmbeddingProvider());
+            Assert.Contains("OPENAI_API_KEY", ex.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OPENAI_API_KEY", existingKey);
+        }
+    }
+
+    [Fact]
+    public void OpenAIEmbeddingProvider_Constants_AreReasonable()
+    {
+        Assert.True(OpenAIEmbeddingProvider.MaxBatchSize > 0);
+        Assert.Equal(1536, OpenAIEmbeddingProvider.Dimension);
+    }
+
+    // ---------------------------------------------------------------
+    // IndexEngine embedding integration (skip-already-embedded)
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void IndexSummary_AccumulatesEmbeddingCounts()
+    {
+        var summary = new IndexSummary();
+
+        summary.Accumulate(new FileIndexResult
+        {
+            RelativePath = "file1.docx",
+            Status = IndexStatus.Indexed,
+            ChunksWritten = 3,
+            ChunksEmbedded = 3,
+        });
+        summary.Accumulate(new FileIndexResult
+        {
+            RelativePath = "file2.docx",
+            Status = IndexStatus.Unchanged,
+        });
+        summary.Accumulate(new FileIndexResult
+        {
+            RelativePath = "file3.txt",
+            Status = IndexStatus.Indexed,
+            ChunksWritten = 2,
+            ChunksEmbedded = 0, // embedding disabled for this file
+        });
+
+        Assert.Equal(3, summary.FilesProcessed);
+        Assert.Equal(2, summary.FilesIndexed);
+        Assert.Equal(1, summary.FilesUnchanged);
+        Assert.Equal(5, summary.TotalChunksWritten);
+        Assert.Equal(3, summary.TotalChunksEmbedded);
+    }
+
+    [Fact]
+    public void IndexSummary_ToDictionary_IncludesEmbeddingFields()
+    {
+        var summary = new IndexSummary
+        {
+            FilesProcessed = 5,
+            FilesIndexed = 3,
+            TotalChunksWritten = 10,
+            TotalChunksEmbedded = 8,
+            ExistingChunksEmbedded = 2,
+        };
+
+        var dict = summary.ToDictionary();
+
+        Assert.Equal(5, dict["filesProcessed"]);
+        Assert.Equal(10, dict["totalChunksWritten"]);
+        Assert.Equal(8, dict["totalChunksEmbedded"]);
+        Assert.Equal(2, dict["existingChunksEmbedded"]);
+    }
+
+    // ---------------------------------------------------------------
+    // Mock HTTP handler for testing
+    // ---------------------------------------------------------------
+
+    private sealed class MockHttpHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, Task<HttpResponseMessage>> _handler;
+
+        public MockHttpHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler)
+        {
+            _handler = handler;
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return await _handler(request);
+        }
+    }
+}

@@ -5,8 +5,8 @@ namespace CapabilityModule.Office.Cli;
 
 /// <summary>
 /// Coordinates the indexing pipeline: walks a directory, extracts content,
-/// chunks it, and writes results to Postgres. Idempotent per file via SHA-256
-/// content hash.
+/// chunks it, writes results to Postgres, and optionally generates vector
+/// embeddings. Idempotent per file via SHA-256 content hash.
 /// </summary>
 internal static class IndexEngine
 {
@@ -21,7 +21,8 @@ internal static class IndexEngine
     public static async Task<IndexSummary> BuildIndexAsync(
         string root,
         string directory,
-        string? connectionString)
+        string? connectionString,
+        IEmbeddingProvider? embeddingProvider = null)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -37,7 +38,7 @@ internal static class IndexEngine
         foreach (var filePath in Directory.EnumerateFiles(
             directory, "*", SearchOption.AllDirectories))
         {
-            var result = await IndexFileAsync(root, filePath, dataSource);
+            var result = await IndexFileAsync(root, filePath, dataSource, embeddingProvider);
             if (result.Status == IndexStatus.Error)
             {
                 Console.Error.WriteLine(
@@ -46,16 +47,26 @@ internal static class IndexEngine
             summary.Accumulate(result);
         }
 
+        // If embedding is enabled, also embed chunks that were left without vectors
+        // (e.g. from a prior index build that didn't embed)
+        if (embeddingProvider is not null)
+        {
+            var existingCount = await EmbedMissingChunksAsync(dataSource, embeddingProvider);
+            summary.ExistingChunksEmbedded = existingCount;
+        }
+
         return summary;
     }
 
     /// <summary>
-    /// Indexes a single file: checks content hash, extracts, chunks, and writes.
+    /// Indexes a single file: checks content hash, extracts, chunks, writes,
+    /// and optionally embeds.
     /// </summary>
     internal static async Task<FileIndexResult> IndexFileAsync(
         string root,
         string filePath,
-        NpgsqlDataSource dataSource)
+        NpgsqlDataSource dataSource,
+        IEmbeddingProvider? embeddingProvider = null)
     {
         try
         {
@@ -66,8 +77,6 @@ internal static class IndexEngine
             }
             catch (InvalidDataException)
             {
-                // Unsupported format — skip silently (only warn if it's a common
-                // binary that might be expected; for now just skip).
                 return new FileIndexResult
                 {
                     RelativePath = Path.GetRelativePath(root, filePath),
@@ -79,7 +88,6 @@ internal static class IndexEngine
             var contentHash = ChunkingEngine.ComputeFileHash(filePath);
             var extension = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
 
-            // Check if the file is already indexed with the same hash
             var existingHash = await GetDocumentHashAsync(dataSource, relativePath);
             if (existingHash == contentHash)
             {
@@ -90,26 +98,45 @@ internal static class IndexEngine
                 };
             }
 
-            // Extract content
             var document = extractor.Extract(filePath);
-
-            // Chunk
             var chunks = ChunkingEngine.ChunkDocument(document);
 
-            // Delete prior chunks if this file was already indexed
             if (existingHash is not null)
             {
                 await DeleteDocumentAsync(dataSource, relativePath);
             }
 
-            // Write document + chunks
             var docId = await InsertDocumentAsync(
                 dataSource, relativePath, contentHash, extension);
 
+            var chunkIds = new List<long>();
             foreach (var (chunk, index) in chunks.Select((c, i) => (c, i)))
             {
-                await InsertChunkAsync(
+                var chunkId = await InsertChunkAsync(
                     dataSource, docId, index, chunk);
+                chunkIds.Add(chunkId);
+            }
+
+            // Embed the chunks if a provider is configured
+            var chunksEmbedded = 0;
+            if (embeddingProvider is not null && chunks.Count > 0)
+            {
+                try
+                {
+                    var texts = chunks.Select(c => c.Text).ToList();
+                    var vectors = await embeddingProvider.EmbedAsync(texts);
+
+                    for (var i = 0; i < chunkIds.Count && i < vectors.Count; i++)
+                    {
+                        await UpdateChunkVectorAsync(dataSource, chunkIds[i], vectors[i]);
+                    }
+                    chunksEmbedded = vectors.Count;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine(
+                        $"error: [{relativePath}] embedding failed: {ex.Message}");
+                }
             }
 
             return new FileIndexResult
@@ -117,11 +144,11 @@ internal static class IndexEngine
                 RelativePath = relativePath,
                 Status = IndexStatus.Indexed,
                 ChunksWritten = chunks.Count,
+                ChunksEmbedded = chunksEmbedded,
             };
         }
         catch (Exception ex)
         {
-            // Errors surface via exit code/stderr per the CLI contract
             return new FileIndexResult
             {
                 RelativePath = Path.GetRelativePath(root, filePath),
@@ -129,6 +156,65 @@ internal static class IndexEngine
                 ErrorMessage = ex.Message,
             };
         }
+    }
+
+    /// <summary>
+    /// Finds chunks with NULL vector and embeds them. Returns the count of
+    /// chunks that were embedded.
+    /// </summary>
+    private static async Task<int> EmbedMissingChunksAsync(
+        NpgsqlDataSource dataSource, IEmbeddingProvider embeddingProvider)
+    {
+        var embedded = 0;
+        const int batchSize = 100;
+
+        while (true)
+        {
+            // Fetch a batch of chunk IDs and texts where vector IS NULL
+            List<(long id, string text)> pending;
+            await using (var conn = await dataSource.OpenConnectionAsync())
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = """
+                    SELECT id, chunk_text FROM chunks
+                    WHERE vector IS NULL
+                    LIMIT $1
+                    """;
+                cmd.Parameters.Add(new NpgsqlParameter { Value = batchSize });
+
+                pending = new List<(long, string)>();
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    pending.Add((reader.GetInt64(0), reader.GetString(1)));
+                }
+            }
+
+            if (pending.Count == 0)
+                break;
+
+            // Embed this batch
+            var texts = pending.Select(p => p.text).ToList();
+            IReadOnlyList<ReadOnlyMemory<float>> vectors;
+            try
+            {
+                vectors = await embeddingProvider.EmbedAsync(texts);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"error: embedding batch failed: {ex.Message}");
+                break;
+            }
+
+            // Write vectors
+            for (var i = 0; i < pending.Count && i < vectors.Count; i++)
+            {
+                await UpdateChunkVectorAsync(dataSource, pending[i].id, vectors[i]);
+                embedded++;
+            }
+        }
+
+        return embedded;
     }
 
     private static async Task<string?> GetDocumentHashAsync(
@@ -172,7 +258,7 @@ internal static class IndexEngine
         return (long)result!;
     }
 
-    private static async Task InsertChunkAsync(
+    private static async Task<long> InsertChunkAsync(
         NpgsqlDataSource dataSource, long documentId,
         int chunkIndex, IndexChunk chunk)
     {
@@ -186,11 +272,30 @@ internal static class IndexEngine
         cmd.CommandText = """
             INSERT INTO chunks (document_id, chunk_index, chunk_text, heading_path)
             VALUES ($1, $2, $3, $4::jsonb)
+            RETURNING id
             """;
         cmd.Parameters.Add(new NpgsqlParameter { Value = documentId });
         cmd.Parameters.Add(new NpgsqlParameter { Value = chunkIndex });
         cmd.Parameters.Add(new NpgsqlParameter { Value = chunk.Text });
         cmd.Parameters.Add(new NpgsqlParameter { Value = headingPathValue });
+
+        var result = await cmd.ExecuteScalarAsync();
+        return (long)result!;
+    }
+
+    private static async Task UpdateChunkVectorAsync(
+        NpgsqlDataSource dataSource, long chunkId, ReadOnlyMemory<float> vector)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync();
+        await using var cmd = conn.CreateCommand();
+
+        // Build the pgvector literal: [1,2,3,...]
+        var vectorArray = vector.Span.ToArray();
+        var vectorLiteral = "[" + string.Join(",", vectorArray) + "]";
+
+        cmd.CommandText = "UPDATE chunks SET vector = $1::vector WHERE id = $2";
+        cmd.Parameters.Add(new NpgsqlParameter { Value = vectorLiteral });
+        cmd.Parameters.Add(new NpgsqlParameter { Value = chunkId });
 
         await cmd.ExecuteNonQueryAsync();
     }
@@ -204,6 +309,8 @@ internal sealed class IndexSummary
     public int FilesSkipped { get; set; }
     public int FilesWithErrors { get; set; }
     public int TotalChunksWritten { get; set; }
+    public int TotalChunksEmbedded { get; set; }
+    public int ExistingChunksEmbedded { get; set; }
 
     public void Accumulate(FileIndexResult result)
     {
@@ -213,6 +320,7 @@ internal sealed class IndexSummary
             case IndexStatus.Indexed:
                 FilesIndexed++;
                 TotalChunksWritten += result.ChunksWritten;
+                TotalChunksEmbedded += result.ChunksEmbedded;
                 break;
             case IndexStatus.Unchanged:
                 FilesUnchanged++;
@@ -236,6 +344,8 @@ internal sealed class IndexSummary
             ["filesSkipped"] = FilesSkipped,
             ["filesWithErrors"] = FilesWithErrors,
             ["totalChunksWritten"] = TotalChunksWritten,
+            ["totalChunksEmbedded"] = TotalChunksEmbedded,
+            ["existingChunksEmbedded"] = ExistingChunksEmbedded,
         };
     }
 }
@@ -253,5 +363,6 @@ internal sealed class FileIndexResult
     public string RelativePath { get; init; } = "";
     public IndexStatus Status { get; init; }
     public int ChunksWritten { get; init; }
+    public int ChunksEmbedded { get; init; }
     public string? ErrorMessage { get; init; }
 }
