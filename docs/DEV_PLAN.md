@@ -93,6 +93,21 @@ calling it — it exposes its CLI/MCP capabilities as a black box. Any mapping f
 this module's tools is decided and owned by VTC, referencing downward into this module; this
 module must never reference back up into VTC or persona-specific concepts.
 
+**Content indexing backs onto a stateful Postgres+pgvector service (Phase 7+).** Every phase
+through Phase 6 operates only on the restricted-root filesystem — no external service, no state
+beyond files on disk. Phase 7 introduces this module's first stateful external dependency: a
+Postgres database (with the `pgvector` extension) for semantic/hybrid search over indexed
+document content. Per the R&D tenancy decision recorded in Phase 7, this is one Postgres+pgvector
+instance colocated with the module's own container (not shared across tenants) — consistent with
+the existing entitlement-via-running-container model, and deliberately not designed around a
+tenant count that isn't known yet. The schema itself stays tenant-agnostic (no `tenant_id`
+column, no assumptions baked in that only hold for exactly one tenant per database) so a future
+shared-instance model would be an additive change, not a redesign. This does not change the
+module's own transport statelessness (`options.Stateless = true` in `Program.cs`, per VTC
+connecting fresh per call) — that's about the MCP session, not the backing store; the CLI/MCP
+adapter remains a thin front end, now over two things it shells/queries out to (the CLI binary,
+and Postgres) instead of one.
+
 ## Phase Plan
 
 ### Phase 0 — CLI scaffold
@@ -288,6 +303,182 @@ escaped string, which sidesteps manual escaping entirely.
     updated
   - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering both the substitution and
     the versioning behavior; MCP-adapter tests under `tests/CapabilityModule.Office.Tests/`
+
+### Phase 7 — Indexing infrastructure (Postgres + pgvector)
+
+- Deliverable: stand up the storage backend for content search — a Postgres database with the
+  `pgvector` extension, added as a new service in `docker-compose.yml`. This is this module's
+  first stateful external dependency (see the architecture note above); everything through
+  Phase 6 touches only the restricted-root filesystem.
+- Decided (R&D-stage, revisit if the tenancy model changes): one Postgres+pgvector instance
+  colocated with this module's own container, not shared across tenants — matches the existing
+  entitlement-via-running-container model and avoids designing a multi-tenant schema before
+  there's a second tenant to design for.
+- Schema (initial pass — expect to iterate once real content/queries exist):
+  - `documents`: id, restricted-root-relative path, content hash (detects when re-indexing is
+    needed), source format, `metadata` JSONB (deliberately open-ended — indexed document types
+    aren't fixed to one domain, so no rigid typed columns), created/updated timestamps.
+  - `chunks`: id, `document_id` (FK), chunk index, chunk text, structural metadata (heading
+    path/section, page or paragraph range where available), a generated `tsvector` column for
+    keyword search, and a `vector` column (`pgvector`) — nullable until Phase 10 populates it, so
+    chunking (Phase 9) can be validated independently of embedding cost/latency.
+  - No `tenant_id` column — isolation is at the container/database level per the decision above.
+    Naming and constraints stay tenant-agnostic so a future shared-instance model is an additive
+    column, not a redesign.
+- Open decision to confirm before building: migration tooling (plain versioned SQL scripts vs.
+  a .NET migration framework) — flag a preference, otherwise default to plain SQL scripts kept
+  under a `db/migrations/` directory for simplicity and portability with the CLI-first approach.
+- Exit criteria:
+  - [ ] Postgres + `pgvector` added as a service in `docker-compose.yml`, image version pinned
+  - [ ] `documents` and `chunks` tables created via a migration, applied to the local compose
+    environment
+  - [ ] connection config (host/port/credentials) sourced from `.env`, consistent with existing
+    docker-compose `.env` loading — no hardcoded credentials
+  - [ ] a basic round-trip (insert a `documents` row, insert a `chunks` row referencing it, read
+    both back) verified against the running container
+  - [ ] `/health` (or a new readiness check) reflects Postgres connectivity, not just the MCP
+    server process being up
+
+### Phase 8 — Format ingestion adapters (.docx, plain text, PDF)
+
+- Deliverable: a small extraction-adapter abstraction in the CLI (e.g. `IContentExtractor` with
+  an `extract(path) -> NormalizedDocument` shape carrying plain text plus whatever structure is
+  recoverable — headings, paragraphs, page numbers) so chunking (Phase 9) operates against one
+  normalized representation regardless of source format, rather than branching per file type
+  inline. This is the ingestion-normalization layer flagged in this plan's design discussion —
+  built as its own phase, and its own extension point, rather than folded silently into chunking.
+- Decided: three adapters land in this phase, selected by file extension/content-type.
+  - `.docx` adapter — conforms the existing `DocxEngine` (Phase 2) to the new interface; no new
+    extraction logic, just wraps what's already built.
+  - Plain-text adapter — conforms the existing `read` primitive (Phase 1) to the interface;
+    paragraphs are the only recoverable structure (no headings), which is why chunking's fallback
+    mode (Phase 9) is paragraph-based.
+  - PDF adapter — new capability, not built in any earlier phase. Extracts text (and page
+    numbers, where recoverable) via a PDF text-extraction library. Library choice TBD — flag a
+    preference before this is built; default to a pure-.NET library (e.g. `PdfPig`) over shelling
+    out to an external PDF binary, consistent with the reasoning Phase 5 used to keep `search`
+    self-contained rather than wrapping `find`/`grep`. Scanned/image-only PDFs (no embedded text
+    layer) are explicitly out of scope here — OCR is a separate, larger capability, not assumed
+    in this phase.
+- An unsupported file extension/format produces a clear "no adapter for this format" error
+  (non-zero exit) rather than being silently skipped or indexed as empty.
+- Exit criteria:
+  - [ ] `IContentExtractor` (or equivalent) abstraction defined, returning normalized text plus
+    whatever structure is recoverable for that format
+  - [ ] `.docx` adapter implemented, producing output equivalent to the existing `DocxEngine`
+    extraction
+  - [ ] plain-text adapter implemented
+  - [ ] PDF adapter implemented, extracting text and page-level structure from PDFs that have an
+    embedded text layer
+  - [ ] an unsupported file extension/format produces a clear non-zero-exit error, not a silent
+    no-op or empty-content result
+  - [ ] a PDF with zero extractable text (scanned/image-only) is flagged distinctly rather than
+    silently treated as a successful empty-content extraction
+  - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering each adapter, including a
+    multi-page/multi-heading PDF fixture
+
+### Phase 9 — Content chunking
+
+- Deliverable: an `index build` CLI command that walks a directory under the restricted root
+  (recursively, like `search`), runs each file through the Phase 8 extraction adapters, splits
+  the normalized text into chunks, and writes `documents`/`chunks` rows (text and structural
+  metadata only — no vector yet, per Phase 7's schema).
+- Decided: chunk boundaries follow document structure (headings/paragraphs) with a generic
+  paragraph-based fallback when structure isn't available; target size ~200–500 tokens per
+  chunk with ~10–20% overlap between adjacent chunks; table content is kept intact rather than
+  flattened into surrounding prose. Exact token target/overlap are tunable — treat these as a
+  starting point to validate against real content, not fixed permanently here.
+- `index build` is idempotent per file via the `documents.content_hash` column — re-running
+  against unchanged files is a no-op; a changed file replaces its prior chunks.
+- Explicitly deferred: embeddings — this phase produces indexable text only, not vectors. Adding
+  a new format is no longer deferred to this phase — that's Phase 8's extension point now.
+- Exit criteria:
+  - [ ] `index build <path>` command added to the CLI, scoped to the restricted root (same
+    `PathSecurity` sandboxing as `read`/`write`/`list`/`search`)
+  - [ ] chunking consumes the Phase 8 `IContentExtractor` output rather than calling any
+    format-specific engine directly
+  - [ ] `.docx` and PDF files are chunked using recovered document structure (headings/pages);
+    plain text is chunked via the generic paragraph-based fallback
+  - [ ] each chunk is written to the `chunks` table with document reference, chunk index, text,
+    and structural metadata (heading path where available)
+  - [ ] re-running `index build` against unchanged files does not duplicate chunks (content-hash
+    check); a changed file's prior chunks are replaced
+  - [ ] JSON output on stdout summarizing what was indexed (documents processed, chunks written),
+    consistent with the CLI's machine-readable output contract
+  - [ ] rejects a path that traverses outside the restricted root, with a non-zero exit code
+  - [ ] errors surface via exit code/stderr, not folded into the JSON payload
+  - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering chunk boundary behavior
+    (structure-aware and fallback) and the idempotent re-index case
+
+### Phase 10 — Embeddings
+
+- Deliverable: generate a vector embedding for each chunk lacking one and populate the `vector`
+  column added in Phase 7.
+- Decided: embedding generation goes through a provider-agnostic interface in the CLI (e.g. an
+  `IEmbeddingProvider` with a single `embed(texts) -> vectors` method), not a hardcoded SDK call
+  to one vendor. The concrete provider is a config value (`.env`/config, not a compile-time
+  choice), specifically so cost/vendor can change without touching call sites.
+- **Decided default provider: OpenAI `text-embedding-3-small`.** Chosen for affordability
+  (~$0.02 per million tokens, among the cheapest hosted options), no infrastructure to run, and
+  it's the de facto default across the RAG ecosystem, so tooling/assumptions elsewhere tend to
+  line up with it. This is the concrete implementation built in this phase; other providers
+  (Voyage AI, self-hosted open-source models via Ollama, etc.) remain swappable later via the
+  `IEmbeddingProvider` config value without a redesign.
+- **Important constraint the abstraction does *not* remove:** embedding vector spaces aren't
+  compatible across providers or models (different dimensionality, different training). Switching
+  providers later always means re-embedding every existing chunk from scratch, however clean the
+  interface is — the abstraction saves a code rewrite, not a re-index.
+- Requires a new credential (OpenAI API key), sourced from `.env`/config, never logged.
+- Embedding generation is a batched step over chunks where `vector IS NULL` (or whose parent
+  document's content hash changed since the last embed pass) — decide whether this runs as part
+  of `index build` itself or as a separate `index embed` step before building; default to folding
+  it into `index build` for a single command unless a reason to separate them emerges (e.g.
+  wanting to re-chunk without re-spending on embeddings).
+- Exit criteria:
+  - [ ] `IEmbeddingProvider` (or equivalent) interface defined in the CLI, with the concrete
+    implementation selected via config rather than hardcoded
+  - [ ] OpenAI `text-embedding-3-small` implemented end to end as the default provider
+  - [ ] API key sourced from config/`.env`, never logged
+  - [ ] chunks lacking a vector are embedded and the `vector` column populated
+  - [ ] re-running against already-embedded, unchanged chunks does not re-embed (cost control)
+  - [ ] embedding failures (provider error, rate limit, timeout) surface via exit code/stderr,
+    consistent with the CLI's error contract, without corrupting partially-written index state
+  - [ ] JSON output includes counts of chunks embedded vs. skipped
+  - [ ] unit/integration tests covering the skip-already-embedded behavior (provider calls can be
+    mocked/stubbed — no requirement to hit the real embedding API in CI)
+
+### Phase 11 — Semantic + hybrid search
+
+- Deliverable: a search command that queries the index — embeds the query text via the same
+  provider as Phase 10, runs a hybrid query combining vector similarity (`pgvector` distance) and
+  keyword relevance (`tsvector`/`ts_rank`), and returns ranked chunk results. Naming TBD:
+  extend `search` with a content/semantic mode, or add a distinct command (e.g. `index search`)
+  — decide once Phase 9/10 land and the CLI surface is clearer; either way it follows the same
+  `PathSecurity`/JSON-output/error-surfacing contract as every other command.
+- Decided: hybrid (vector + keyword), not pure-semantic — precise-term content (defined terms,
+  identifiers, exact phrasing, which matters especially for legal-style documents) depends on
+  exact matches that embeddings alone can blur.
+- Each result includes the source document's restricted-root path (per the reference-
+  composability contract established in Phase 1/5) so a hit can be piped into `docx read`/`read`
+  for full context, plus the chunk's structural metadata (heading path) so results are
+  self-describing without a round-trip.
+- Explicitly deferred: automatically keeping the index in sync when `docx create`/`docx replace`
+  (Phase 2/Phase 6) modify a file — for now, re-indexing is a manual `index build` re-run.
+  Automatic reindex-on-write is a natural follow-up once the manual path is proven in practice.
+- Exit criteria:
+  - [ ] search command added/extended, taking free-text query input
+  - [ ] query text is embedded via the Phase 10 provider and compared against `chunks.vector`
+  - [ ] keyword relevance (`tsvector`/`ts_rank`) is combined with vector similarity into a single
+    ranked result set (exact combination/weighting TBD — start simple, e.g. reciprocal rank
+    fusion or a weighted sum, and tune once there's real query traffic to evaluate against)
+  - [ ] each result includes the source document path, chunk text, structural metadata, and a
+    relevance score
+  - [ ] rejects a path/root that traverses outside the restricted root, with a non-zero exit code
+  - [ ] errors (embedding failure, DB unavailable) surface via exit code/stderr, not folded into
+    the JSON payload
+  - [ ] MCP tool wired per Phase 3's pattern, `module.manifest.json` updated
+  - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` for the CLI command (DB/embedding
+    calls stubbed); MCP-adapter tests under `tests/CapabilityModule.Office.Tests/`
 
 ## Reference
 
