@@ -325,18 +325,20 @@ escaped string, which sidesteps manual escaping entirely.
   - No `tenant_id` column — isolation is at the container/database level per the decision above.
     Naming and constraints stay tenant-agnostic so a future shared-instance model is an additive
     column, not a redesign.
-- Open decision to confirm before building: migration tooling (plain versioned SQL scripts vs.
-  a .NET migration framework) — flag a preference, otherwise default to plain SQL scripts kept
-  under a `db/migrations/` directory for simplicity and portability with the CLI-first approach.
+- Open decision: migration tooling (plain versioned SQL scripts vs. a .NET migration framework).
+  **Decided: plain SQL scripts** under `db/migrations/` with a `schema_migrations` tracking table,
+  applied by `DbInitializer` on startup — consistent with the CLI-first approach and portable
+  with no framework dependency.
 - Exit criteria:
-  - [ ] Postgres + `pgvector` added as a service in `docker-compose.yml`, image version pinned
-  - [ ] `documents` and `chunks` tables created via a migration, applied to the local compose
+  - [x] Postgres + `pgvector` added as a service in `docker-compose.yml`, image version pinned
+    (`pgvector/pgvector:pg17`)
+  - [x] `documents` and `chunks` tables created via a migration, applied to the local compose
     environment
-  - [ ] connection config (host/port/credentials) sourced from `.env`, consistent with existing
+  - [x] connection config (host/port/credentials) sourced from `.env`, consistent with existing
     docker-compose `.env` loading — no hardcoded credentials
-  - [ ] a basic round-trip (insert a `documents` row, insert a `chunks` row referencing it, read
+  - [x] a basic round-trip (insert a `documents` row, insert a `chunks` row referencing it, read
     both back) verified against the running container
-  - [ ] `/health` (or a new readiness check) reflects Postgres connectivity, not just the MCP
+  - [x] `/health` (or a new readiness check) reflects Postgres connectivity, not just the MCP
     server process being up
 
 ### Phase 8 — Format ingestion adapters (.docx, plain text, PDF)

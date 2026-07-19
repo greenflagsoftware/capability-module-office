@@ -34,6 +34,9 @@ USER app
 
 COPY --from=build --chown=app:app /app/publish .
 
+# Copy database migration scripts so DbInitializer can find them at startup
+COPY --chown=app:app db/ db/
+
 ENV ASPNETCORE_URLS=http://+:8080
 ENV OFFICE_CLI_ROOT=/data
 EXPOSE 8080

@@ -1,4 +1,20 @@
 services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: office_module
+      POSTGRES_USER: office_module
+      POSTGRES_PASSWORD: ${OFFICE_DB_PASSWORD:-office_module_dev}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U office_module -d office_module"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   module:
     build: .
     ports:
@@ -6,3 +22,11 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      OFFICE_DB_CONNECTION: "Host=db;Port=5432;Database=office_module;Username=office_module;Password=${OFFICE_DB_PASSWORD:-office_module_dev}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
