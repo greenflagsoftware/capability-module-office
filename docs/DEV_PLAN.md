@@ -204,6 +204,91 @@ confirmed by round-tripping such content through the live container before the f
 switching `CliRunner`/`DocxTools` to build a `ProcessStartInfo.ArgumentList` instead of a hand-
 escaped string, which sidesteps manual escaping entirely.
 
+### Phase 5 — Document & filename search
+
+- Deliverable: a `search` CLI command that finds files by name/path pattern within the
+  restricted root, recursively (unlike `list`, which only enumerates one directory's immediate
+  entries). Built on .NET's own file-system APIs (`Directory.EnumerateFiles`/glob matching) —
+  no shelling out to external search binaries (`find`/`grep`). That keeps the CLI self-contained
+  and portable per the CLI-first architecture notes above, and avoids a second layer of
+  subprocess/escaping risk on top of the MCP→CLI subprocess boundary that Phase 4 just hardened.
+  Output follows the same reference-composability contract as `list`/`read` (matched entries
+  include `path` so they can be piped into `read`/`docx read`/etc.).
+- No index/lookup structure in this phase — filename search over the restricted root's
+  directory tree is fast enough for an on-demand tool call at this scale. Revisit indexing only
+  if/when content search (below) is added and a directory walk proves too slow in practice.
+- Explicitly deferred: content-based search (matching *inside* file contents, e.g. .docx body
+  text) — a likely future enhancement, not built now. When it lands, that's the natural trigger
+  to reconsider an index — a full-text index amortizes across many searches; a directory walk
+  doesn't need one for filenames alone.
+- Exit criteria:
+  - [ ] `search` command added to the CLI, scoped to the restricted root (same `PathSecurity`
+    sandboxing as `read`/`write`/`list`)
+  - [ ] matches by filename/path pattern (substring or glob), recursively under the given
+    directory
+  - [ ] JSON output on stdout; each match includes `name`/`path` (and `type`), consistent with
+    `list`'s entry shape
+  - [ ] rejects a path/root that traverses outside the restricted root, with a non-zero exit
+    code (covered by tests alongside existing `PathSecurityTests.cs`)
+  - [ ] errors surface via exit code/stderr, not folded into the JSON payload
+  - [ ] MCP tool wired per Phase 3's pattern (new tool class alongside `DocxTools.cs`),
+    `module.manifest.json` updated
+  - [ ] unit tests under `tests/AgentDock.Office.Cli.Tests/` for the CLI command; MCP-adapter
+    tests under `tests/AgentDock.Office.Tests/`
+
+### Phase 6 — Document editing
+
+- Decided: first edit primitive is find-and-replace, via a new `docx replace` command —
+  targeted text substitution within an existing document's body, not a full caller-supplied
+  rewrite (that stays a deferred "full-content replace" option, not built now — see prior
+  draft of this phase for the rejected/deferred alternatives).
+- Mechanically, `docx replace` rebuilds the whole document in memory (OpenXml doesn't offer a
+  clean partial in-place text patch), so the on-disk operation is a full-file overwrite even
+  though the caller-facing contract is a targeted substitution — this is an implementation
+  detail, not a change to the primitive's semantics or risk profile.
+- **Versioning:** before the new content is written, the CLI snapshots the current file to a
+  version store, then overwrites the original in place. This gives an undo path without needing
+  a separate "undo" command to exist yet — the previous version is just a file sitting in the
+  restricted root.
+  - Proposed convention (flag if you want something else before this is built): a `_versions/`
+    subdirectory mirroring the document's relative path, with the pre-edit copy saved as
+    `_versions/<relative-path>/<original-filename>.v{N}.docx` (`N` incrementing per prior
+    version count for that file). Kept inside the restricted root so existing `PathSecurity`
+    sandboxing covers it with no new trust boundary.
+  - Retention is unbounded for this phase — no pruning/expiry of old versions. Worth flagging
+    as a follow-up hardening item (akin to Phase 4's resource limits) once real usage shows
+    whether unbounded version growth is actually a problem, rather than guessing now.
+  - `docx replace`'s JSON output includes the version number and version path it wrote, so the
+    version is both a human-readable ordinal and referenceable by other commands
+    (`docx read <version-path>` to inspect a prior version) per the reference-composability
+    contract.
+  - JSON output also includes the last-write/modified timestamp (UTC, ISO 8601) of the file
+    after the overwrite — read from the filesystem (`FileInfo.LastWriteTimeUtc`) rather than
+    tracked separately, so it can't drift from what's actually on disk.
+- Follows the same CLI-first pattern as Phase 2: new `DocxEngine` method(s), new `docx replace`
+  subcommand, then an MCP tool once the CLI proves out standalone.
+- Consult [agentic_guidance.xml](agentic_guidance.xml) for method-safety/reversibility gating —
+  write-capable, mutating commands warrant more caution than the read-only
+  `docx read`/`info`/`search`; the versioning mechanism above is this module's answer to that
+  for `docx replace` specifically.
+- Exit criteria:
+  - [ ] `docx replace <path>` command added, taking a single find/replace text pair (not a
+    batch — one substitution per call, matching current scope)
+  - [ ] before overwriting, the pre-edit content is snapshotted to the version store described
+    above, with an incrementing version number
+  - [ ] the target file is overwritten with the substitution applied; non-matching content is
+    verifiably unchanged (this is the check that distinguishes edit correctness from `create`'s)
+  - [ ] JSON output includes the edited file's path/resolved location, the version number and
+    version path written, and the file's last-write timestamp (UTC, ISO 8601) after the
+    overwrite, consistent with other commands' reference-composability contract
+  - [ ] rejects a path that traverses outside the restricted root, and a find/replace on a
+    nonexistent file, each with a non-zero exit code
+  - [ ] errors surface via exit code/stderr, not folded into the JSON payload
+  - [ ] MCP tool wired per Phase 3's pattern (alongside `DocxTools.cs`), `module.manifest.json`
+    updated
+  - [ ] unit tests under `tests/AgentDock.Office.Cli.Tests/` covering both the substitution and
+    the versioning behavior; MCP-adapter tests under `tests/AgentDock.Office.Tests/`
+
 ## Reference
 
 - AgentDock module architecture decisions (sidecar-per-module, MCP over HTTP, entitlement via
