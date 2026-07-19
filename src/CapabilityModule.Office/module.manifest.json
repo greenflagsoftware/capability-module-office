@@ -2,7 +2,7 @@
   "id": "office",
   "name": "Office",
   "version": "0.1.0",
-  "description": "Office-document tools for capability modules — read, create, and inspect .docx files on the filesystem.",
+  "description": "Office-document tools for capability modules — read, create, inspect, and search .docx files on the filesystem.",
   "tools": [
     {
       "name": "docx_read",
@@ -19,6 +19,14 @@
     {
       "name": "search",
       "description": "Search for files by name or path pattern within the restricted root, recursively. Supports glob patterns (e.g. *.txt, report*) and substring matching. Returns matching file names, paths, and sizes."
+    },
+    {
+      "name": "index_build",
+      "description": "Build a search index over documents in the restricted root. Walks files, extracts text, chunks content, and optionally generates vector embeddings for semantic search. Idempotent — re-running only processes changed files."
+    },
+    {
+      "name": "index_search",
+      "description": "Search indexed document content using hybrid (vector + keyword) search. Returns relevant chunks from indexed documents, ranked by relevance. Requires the index to have been built first via index_build."
     }
   ]
 }

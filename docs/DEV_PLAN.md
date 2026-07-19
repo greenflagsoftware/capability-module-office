@@ -451,15 +451,17 @@ escaped string, which sidesteps manual escaping entirely.
 
 ### Phase 11 — Semantic + hybrid search
 
-- Deliverable: a search command that queries the index — embeds the query text via the same
-  provider as Phase 10, runs a hybrid query combining vector similarity (`pgvector` distance) and
-  keyword relevance (`tsvector`/`ts_rank`), and returns ranked chunk results. Naming TBD:
-  extend `search` with a content/semantic mode, or add a distinct command (e.g. `index search`)
-  — decide once Phase 9/10 land and the CLI surface is clearer; either way it follows the same
-  `PathSecurity`/JSON-output/error-surfacing contract as every other command.
+- Deliverable: `index search` CLI command that queries the index — embeds the query text via the
+  Phase 10 provider, runs a hybrid query combining vector similarity (`pgvector` cosine distance)
+  and keyword relevance (`tsvector`/`ts_rank`), and returns ranked chunk results. Added as a
+  subcommand of the existing `index` command (alongside `index build`), keeping the CLI surface
+  clean and consistent with the `docx` subcommand pattern.
 - Decided: hybrid (vector + keyword), not pure-semantic — precise-term content (defined terms,
   identifiers, exact phrasing, which matters especially for legal-style documents) depends on
   exact matches that embeddings alone can blur.
+- Combination strategy: weighted sum with equal weights (0.5 each), NULL-safe so chunks
+  contributing only one signal still score via the other. Weighting is tunable constant in
+  `IndexSearchEngine` — refine once real query traffic exists.
 - Each result includes the source document's restricted-root path (per the reference-
   composability contract established in Phase 1/5) so a hit can be piped into `docx read`/`read`
   for full context, plus the chunk's structural metadata (heading path) so results are
@@ -468,19 +470,22 @@ escaped string, which sidesteps manual escaping entirely.
   (Phase 2/Phase 6) modify a file — for now, re-indexing is a manual `index build` re-run.
   Automatic reindex-on-write is a natural follow-up once the manual path is proven in practice.
 - Exit criteria:
-  - [ ] search command added/extended, taking free-text query input
-  - [ ] query text is embedded via the Phase 10 provider and compared against `chunks.vector`
-  - [ ] keyword relevance (`tsvector`/`ts_rank`) is combined with vector similarity into a single
-    ranked result set (exact combination/weighting TBD — start simple, e.g. reciprocal rank
-    fusion or a weighted sum, and tune once there's real query traffic to evaluate against)
-  - [ ] each result includes the source document path, chunk text, structural metadata, and a
-    relevance score
-  - [ ] rejects a path/root that traverses outside the restricted root, with a non-zero exit code
-  - [ ] errors (embedding failure, DB unavailable) surface via exit code/stderr, not folded into
+  - [x] `index search` subcommand added, taking free-text query input (plus optional path scope
+    and limit)
+  - [x] query text is embedded via the Phase 10 `IEmbeddingProvider` and compared against
+    `chunks.vector` using cosine distance (`<=>`)
+  - [x] keyword relevance (`tsvector`/`ts_rank` via `plainto_tsquery`) is combined with vector
+    similarity into a single ranked result set (weighted sum, equal weights, NULL-safe)
+  - [x] each result includes the source document path, chunk text, structural metadata, and
+    individual vector/keyword/combined relevance scores
+  - [x] rejects a path/root that traverses outside the restricted root, with a non-zero exit code
+    (inherited from PathSecurity sandbox via the same pattern as every other command)
+  - [x] errors (embedding failure, DB unavailable) surface via exit code/stderr, not folded into
     the JSON payload
-  - [ ] MCP tool wired per Phase 3's pattern, `module.manifest.json` updated
-  - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` for the CLI command (DB/embedding
-    calls stubbed); MCP-adapter tests under `tests/CapabilityModule.Office.Tests/`
+  - [x] MCP tool wired per Phase 3's pattern (`IndexTools.cs` alongside `DocxTools.cs`),
+    `module.manifest.json` updated (added `index_build` and `index_search`)
+  - [x] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` (record shape, input validation,
+    constants); MCP-adapter tests under `tests/CapabilityModule.Office.Tests/` (input validation)
 
 ## Reference
 
