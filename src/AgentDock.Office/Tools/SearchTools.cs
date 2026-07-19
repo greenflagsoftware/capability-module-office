@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace AgentDock.Office.Tools;
@@ -41,6 +42,14 @@ public static class SearchTools
         }
     }
 
+    /// <summary>
+    /// Failures are surfaced as <see cref="McpException"/> specifically because
+    /// the MCP SDK only forwards an exception's <c>Message</c> to the calling
+    /// client for that type — any other exception type is replaced with a
+    /// generic "An error occurred invoking '{tool}'." before it leaves the
+    /// server, hiding the real cause (verified against ModelContextProtocol.Core
+    /// 1.4.0 behavior).
+    /// </summary>
     private static async Task<JsonDocument> CallCliAsync(IReadOnlyList<string> arguments, TimeSpan? timeout = null)
     {
         string json;
@@ -50,22 +59,21 @@ public static class SearchTools
         }
         catch (CliToolException ex)
         {
-            throw new InvalidOperationException(
-                $"CLI tool call failed. {ex.Message}");
+            throw new McpException($"CLI tool call failed. {ex.Message}");
         }
-        catch (CliTimeoutException)
+        catch (CliTimeoutException ex)
         {
-            throw;
+            throw new McpException(ex.Message);
         }
         catch (FileNotFoundException ex)
         {
-            throw new InvalidOperationException(
+            throw new McpException(
                 $"CLI binary not found: {ex.FileName}. The module may not be deployed correctly.");
         }
 
         if (string.IsNullOrWhiteSpace(json))
         {
-            throw new InvalidOperationException(
+            throw new McpException(
                 "CLI tool produced empty output. This may indicate an internal error.");
         }
 
@@ -75,7 +83,7 @@ public static class SearchTools
         }
         catch (JsonException ex)
         {
-            throw new InvalidOperationException(
+            throw new McpException(
                 $"CLI tool produced malformed JSON output: {ex.Message}. Raw output (first 200 chars): {json[..Math.Min(json.Length, 200)]}");
         }
     }
