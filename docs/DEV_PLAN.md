@@ -395,21 +395,21 @@ escaped string, which sidesteps manual escaping entirely.
 - Explicitly deferred: embeddings — this phase produces indexable text only, not vectors. Adding
   a new format is no longer deferred to this phase — that's Phase 8's extension point now.
 - Exit criteria:
-  - [ ] `index build <path>` command added to the CLI, scoped to the restricted root (same
+  - [x] `index build <path>` command added to the CLI, scoped to the restricted root (same
     `PathSecurity` sandboxing as `read`/`write`/`list`/`search`)
-  - [ ] chunking consumes the Phase 8 `IContentExtractor` output rather than calling any
+  - [x] chunking consumes the Phase 8 `IContentExtractor` output rather than calling any
     format-specific engine directly
-  - [ ] `.docx` and PDF files are chunked using recovered document structure (headings/pages);
+  - [x] `.docx` and PDF files are chunked using recovered document structure (headings/pages);
     plain text is chunked via the generic paragraph-based fallback
-  - [ ] each chunk is written to the `chunks` table with document reference, chunk index, text,
+  - [x] each chunk is written to the `chunks` table with document reference, chunk index, text,
     and structural metadata (heading path where available)
-  - [ ] re-running `index build` against unchanged files does not duplicate chunks (content-hash
+  - [x] re-running `index build` against unchanged files does not duplicate chunks (content-hash
     check); a changed file's prior chunks are replaced
-  - [ ] JSON output on stdout summarizing what was indexed (documents processed, chunks written),
+  - [x] JSON output on stdout summarizing what was indexed (documents processed, chunks written),
     consistent with the CLI's machine-readable output contract
-  - [ ] rejects a path that traverses outside the restricted root, with a non-zero exit code
-  - [ ] errors surface via exit code/stderr, not folded into the JSON payload
-  - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering chunk boundary behavior
+  - [x] rejects a path that traverses outside the restricted root, with a non-zero exit code
+  - [x] errors surface via exit code/stderr, not folded into the JSON payload
+  - [x] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering chunk boundary behavior
     (structure-aware and fallback) and the idempotent re-index case
 
 ### Phase 10 — Embeddings
