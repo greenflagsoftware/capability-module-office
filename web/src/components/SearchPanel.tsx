@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   searchFilename,
   searchHybrid,
@@ -27,12 +27,14 @@ export default function SearchPanel({
   const [totalResults, setTotalResults] = useState(0);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const doSearch = useCallback(
     async (q: string) => {
       const trimmed = q.trim();
+      setExpandedGroups(new Set());
       if (!trimmed) {
         setResults([]);
         setTotalResults(0);
@@ -110,6 +112,33 @@ export default function SearchPanel({
 
   const isSelected = (entry: SearchEntry | HybridSearchEntry) =>
     entry.path === selectedPath;
+
+  // Hybrid search returns one row per matching chunk, so a single document
+  // with many relevant chunks (e.g. "bread" hitting a 14-chunk contract)
+  // otherwise floods the list with rows that all point at the same file.
+  // Group by path, preserving the backend's score-descending order via the
+  // first-seen index of each document's best-ranked chunk.
+  const groupedResults = useMemo(() => {
+    const order: string[] = [];
+    const byPath = new Map<string, (SearchEntry | HybridSearchEntry)[]>();
+    for (const entry of results) {
+      if (!byPath.has(entry.path)) {
+        byPath.set(entry.path, []);
+        order.push(entry.path);
+      }
+      byPath.get(entry.path)!.push(entry);
+    }
+    return order.map((path) => ({ path, entries: byPath.get(path)! }));
+  }, [results]);
+
+  const toggleGroupExpanded = useCallback((path: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
 
   return (
     <>
@@ -224,41 +253,90 @@ export default function SearchPanel({
         {!loading && hasSearched && results.length > 0 && (
           <>
             <div className="search-meta">
-              {totalResults} result{totalResults !== 1 ? "s" : ""}
+              {mode === "hybrid" && groupedResults.length !== totalResults
+                ? `${totalResults} match${totalResults !== 1 ? "es" : ""} in ${groupedResults.length} document${groupedResults.length !== 1 ? "s" : ""}`
+                : `${totalResults} result${totalResults !== 1 ? "s" : ""}`}
             </div>
-            {results.map((entry, idx) => (
-              <button
-                key={`${entry.path}-${idx}`}
-                className={`result-item ${isSelected(entry) ? "selected" : ""}`}
-                onClick={() => handleSelect(entry)}
-              >
-                <div className={`result-icon ${getIcon(entry)}`}>
-                  {getIcon(entry) === "docx" && "W"}
-                  {getIcon(entry) === "pdf" && "P"}
-                  {getIcon(entry) === "text" && "T"}
-                  {getIcon(entry) === "image" && "I"}
-                  {getIcon(entry) === "other" && "F"}
-                </div>
-                <div className="result-info">
-                  <div className="result-name">{getName(entry)}</div>
-                  <div className="result-path">{getDir(entry) || "/"}</div>
-                  {"chunkText" in entry && entry.chunkText && (
-                    <div className="hybrid-result-text">
-                      {entry.chunkText}
+            {groupedResults.map((group) => {
+              const [primary, ...extraChunks] = group.entries;
+              const isExpanded = expandedGroups.has(group.path);
+              return (
+                <div key={group.path} className="result-group">
+                  <button
+                    className={`result-item ${isSelected(primary) ? "selected" : ""}`}
+                    onClick={() => handleSelect(primary)}
+                  >
+                    <div className={`result-icon ${getIcon(primary)}`}>
+                      {getIcon(primary) === "docx" && "W"}
+                      {getIcon(primary) === "pdf" && "P"}
+                      {getIcon(primary) === "text" && "T"}
+                      {getIcon(primary) === "image" && "I"}
+                      {getIcon(primary) === "other" && "F"}
                     </div>
-                  )}
-                  {"chunkText" in entry && (
-                    <div className="hybrid-scores">
-                      {"score" in entry && entry.score != null && (
-                        <span className="score-badge">
-                          {(entry as HybridSearchEntry).score.toFixed(2)}
-                        </span>
+                    <div className="result-info">
+                      <div className="result-name">{getName(primary)}</div>
+                      <div className="result-path">{getDir(primary) || "/"}</div>
+                      {"chunkText" in primary && primary.chunkText && (
+                        <div className="hybrid-result-text">
+                          {primary.chunkText}
+                        </div>
+                      )}
+                      {"chunkText" in primary && (
+                        <div className="hybrid-scores">
+                          {group.entries.length > 1 ? (
+                            <span className="score-badge">
+                              {group.entries.length} matches
+                            </span>
+                          ) : (
+                            "score" in primary &&
+                            primary.score != null && (
+                              <span className="score-badge">
+                                {(primary as HybridSearchEntry).score.toFixed(2)}
+                              </span>
+                            )
+                          )}
+                        </div>
                       )}
                     </div>
+                  </button>
+
+                  {extraChunks.length > 0 && (
+                    <>
+                      <button
+                        className="result-chunk-toggle"
+                        onClick={() => toggleGroupExpanded(group.path)}
+                      >
+                        {isExpanded
+                          ? "Hide additional matches"
+                          : `Show ${extraChunks.length} more match${extraChunks.length !== 1 ? "es" : ""} in this document`}
+                      </button>
+                      {isExpanded && (
+                        <div className="result-chunk-list">
+                          {extraChunks.map((chunk, idx) => (
+                            <button
+                              key={`${group.path}-chunk-${idx}`}
+                              className={`result-chunk ${isSelected(chunk) ? "selected" : ""}`}
+                              onClick={() => handleSelect(chunk)}
+                            >
+                              {"chunkText" in chunk && chunk.chunkText && (
+                                <span className="result-chunk-text">
+                                  {chunk.chunkText}
+                                </span>
+                              )}
+                              {"score" in chunk && chunk.score != null && (
+                                <span className="score-badge">
+                                  {(chunk as HybridSearchEntry).score.toFixed(2)}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </>
         )}
       </div>

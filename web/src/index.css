@@ -308,6 +308,64 @@ body {
   color: var(--text-secondary);
 }
 
+.result-group {
+  margin-bottom: 2px;
+}
+
+.result-chunk-toggle {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 12px 6px 54px;
+  border: none;
+  background: none;
+  font-size: 0.72rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.result-chunk-toggle:hover {
+  text-decoration: underline;
+}
+
+.result-chunk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px 4px 54px;
+}
+
+.result-chunk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition);
+}
+
+.result-chunk:hover {
+  background: var(--bg-tertiary);
+}
+
+.result-chunk.selected {
+  background: var(--accent-light);
+}
+
+.result-chunk-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
