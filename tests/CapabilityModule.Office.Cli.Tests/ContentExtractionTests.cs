@@ -100,6 +100,72 @@ public class ContentExtractionTests : IDisposable
     }
 
     [Fact]
+    public void DocxExtractor_TableContentIsExtracted()
+    {
+        // A heading, a paragraph, then a table — tables are direct children of
+        // Body alongside Paragraph, so body.Elements<Paragraph>() alone would
+        // never see this table (regression test for the table-drop bug).
+        var file = PathFor("with-table.docx");
+        using (var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Create(
+            file, DocumentFormat.OpenXml.WordprocessingDocumentType.Document))
+        {
+            var mainPart = doc.AddMainDocumentPart();
+            mainPart.Document = new DocumentFormat.OpenXml.Wordprocessing.Document();
+            var body = mainPart.Document.AppendChild(new DocumentFormat.OpenXml.Wordprocessing.Body());
+
+            body.AppendChild(new DocumentFormat.OpenXml.Wordprocessing.Paragraph(
+                new DocumentFormat.OpenXml.Wordprocessing.ParagraphProperties(
+                    new DocumentFormat.OpenXml.Wordprocessing.ParagraphStyleId { Val = "Heading1" }),
+                new DocumentFormat.OpenXml.Wordprocessing.Run(
+                    new DocumentFormat.OpenXml.Wordprocessing.Text("Pricing"))));
+
+            body.AppendChild(new DocumentFormat.OpenXml.Wordprocessing.Paragraph(
+                new DocumentFormat.OpenXml.Wordprocessing.Run(
+                    new DocumentFormat.OpenXml.Wordprocessing.Text("See the table below."))));
+
+            DocumentFormat.OpenXml.Wordprocessing.TableCell Cell(string text) =>
+                new(new DocumentFormat.OpenXml.Wordprocessing.Paragraph(
+                    new DocumentFormat.OpenXml.Wordprocessing.Run(
+                        new DocumentFormat.OpenXml.Wordprocessing.Text(text))));
+
+            var table = new DocumentFormat.OpenXml.Wordprocessing.Table(
+                new DocumentFormat.OpenXml.Wordprocessing.TableRow(Cell("Plan"), Cell("Price")),
+                new DocumentFormat.OpenXml.Wordprocessing.TableRow(Cell("Basic"), Cell("$10")),
+                new DocumentFormat.OpenXml.Wordprocessing.TableRow(Cell("Pro"), Cell("$25")));
+            body.AppendChild(table);
+
+            mainPart.Document.Save();
+        }
+
+        var extractor = new DocxExtractor();
+        var result = extractor.Extract(file);
+
+        // The table's content must appear somewhere in the extracted text —
+        // previously it was silently dropped entirely.
+        Assert.Contains("Basic", result.Text);
+        Assert.Contains("$10", result.Text);
+        Assert.Contains("Pro", result.Text);
+        Assert.Contains("$25", result.Text);
+
+        // The table should survive as one intact, recognizable unit (single
+        // paragraph entry, no embedded newlines) rather than being flattened
+        // row-by-row into ordinary prose paragraphs.
+        var tableParagraph = result.Paragraphs.SingleOrDefault(p => p.StartsWith("[Table]"));
+        Assert.NotNull(tableParagraph);
+        Assert.DoesNotContain('\n', tableParagraph!);
+        Assert.DoesNotContain('\r', tableParagraph!);
+        Assert.Contains("Plan | Price", tableParagraph);
+        Assert.Contains("Basic | $10", tableParagraph);
+        Assert.Contains("Pro | $25", tableParagraph);
+
+        // The table paragraph should carry the heading path in effect at its
+        // position, same as any other paragraph.
+        var tableIndex = result.Paragraphs.ToList().IndexOf(tableParagraph!);
+        Assert.True(result.ParagraphHeadings.ContainsKey(tableIndex));
+        Assert.Contains("Pricing", result.ParagraphHeadings[tableIndex]);
+    }
+
+    [Fact]
     public void DocxExtractor_EmptyBody_ReturnsEmptyDocument()
     {
         var file = PathFor("empty.docx");

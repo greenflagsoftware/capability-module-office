@@ -362,8 +362,13 @@ escaped string, which sidesteps manual escaping entirely.
     self-contained rather than wrapping `find`/`grep`. Scanned/image-only PDFs (no embedded text
     layer) are explicitly out of scope here — OCR is a separate, larger capability, not assumed
     in this phase.
-- An unsupported file extension/format produces a clear "no adapter for this format" error
-  (non-zero exit) rather than being silently skipped or indexed as empty.
+- An unsupported file extension/format produces a clear "no adapter for this format" error from
+  `ContentExtractorFactory` rather than being indexed as empty. In the single-lookup case (the
+  factory called directly) that error propagates as a hard failure. In `index build`'s bulk
+  directory walk (Phase 9) it's caught per file and recorded as a skip (counted in
+  `filesSkipped`, visible in the JSON summary) rather than aborting the whole walk — a directory
+  legitimately contains files with no adapter (`.gitkeep`, version-store backups, etc.), and
+  failing the entire run on the first one would be worse than reporting it and continuing.
 - Exit criteria:
   - [x] `IContentExtractor` (or equivalent) abstraction defined, returning normalized text plus
     whatever structure is recoverable for that format
@@ -372,8 +377,10 @@ escaped string, which sidesteps manual escaping entirely.
   - [x] plain-text adapter implemented
   - [x] PDF adapter implemented, extracting text and page-level structure from PDFs that have an
     embedded text layer
-  - [x] an unsupported file extension/format produces a clear non-zero-exit error, not a silent
-    no-op or empty-content result
+  - [x] an unsupported file extension/format produces a clear error from
+    `ContentExtractorFactory` (hard failure when looked up directly; a recorded per-file skip,
+    not a silent no-op or empty-content result, when encountered during `index build`'s
+    directory walk)
   - [x] a PDF with zero extractable text (scanned/image-only) is flagged distinctly rather than
     silently treated as a successful empty-content extraction
   - [x] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering each adapter, including a
@@ -410,7 +417,9 @@ escaped string, which sidesteps manual escaping entirely.
   - [x] rejects a path that traverses outside the restricted root, with a non-zero exit code
   - [x] errors surface via exit code/stderr, not folded into the JSON payload
   - [x] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering chunk boundary behavior
-    (structure-aware and fallback) and the idempotent re-index case
+    (structure-aware and fallback); the idempotent re-index case is covered by
+    `IndexEngineTests.cs` against a real Postgres+pgvector container (Testcontainers — see the
+    note after Phase 10's exit criteria)
 
 ### Phase 10 — Embeddings
 
@@ -446,8 +455,23 @@ escaped string, which sidesteps manual escaping entirely.
   - [x] embedding failures (provider error, rate limit, timeout) surface via exit code/stderr,
     consistent with the CLI's error contract, without corrupting partially-written index state
   - [x] JSON output includes counts of chunks embedded vs. skipped
-  - [x] unit/integration tests covering the skip-already-embedded behavior (provider calls can be
-    mocked/stubbed — no requirement to hit the real embedding API in CI)
+  - [x] the skip-already-embedded behavior is covered by `IndexEngineTests.cs` against a real
+    Postgres+pgvector container, with a fake `IEmbeddingProvider` (schema-valid 1536-dim vectors,
+    no real API calls — see the note below)
+
+**Note on database integration testing.** `IndexEngineTests.cs` and `IndexSearchEngineDbTests.cs`
+(`tests/CapabilityModule.Office.Cli.Tests/`) run against a real `pgvector/pgvector:pg17` container
+spun up per test run via Testcontainers (`PostgresFixture.cs`), with the actual migration scripts
+from `db/migrations/` applied — not a hand-maintained schema copy. This was added after the
+Phase 7-11 architecture review found that no automated test had ever exercised the DB-backed code
+path (`IndexEngine`, `IndexSearchEngine`'s SQL) — everything before this was unit-level only,
+exercised manually via `docker compose up`. Standing the real thing up immediately caught a bug
+that manual testing had missed: the subdirectory-filter parameter in `IndexSearchEngine.SearchAsync`
+had no explicit `NpgsqlDbType`, so Postgres couldn't infer its type when the value was `null` — the
+common case of an unscoped search — and every such query threw `42P08: could not determine data
+type of parameter`. Fixed by setting `NpgsqlDbType.Text` explicitly. **Requires Docker running
+locally** (same requirement as `docker compose up` for this module); there is no CI pipeline yet
+to gate on this.
 
 ### Phase 11 — Semantic + hybrid search
 

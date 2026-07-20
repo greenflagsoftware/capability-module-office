@@ -53,11 +53,11 @@ internal sealed class IndexCommand
                 {
                     try
                     {
-                        embeddingProvider = new OpenAIEmbeddingProvider();
+                        embeddingProvider = EmbeddingProviderFactory.Create();
                     }
                     catch (InvalidOperationException ex)
                     {
-                        // API key not set — warn and continue without embedding
+                        // Provider unset/misconfigured (e.g. no API key) — warn and continue without embedding
                         Console.Error.WriteLine($"warning: embedding disabled — {ex.Message}");
                     }
                 }
@@ -145,7 +145,7 @@ internal sealed class IndexCommand
                 IEmbeddingProvider? embeddingProvider = null;
                 try
                 {
-                    embeddingProvider = new OpenAIEmbeddingProvider();
+                    embeddingProvider = EmbeddingProviderFactory.Create();
                 }
                 catch (InvalidOperationException ex)
                 {

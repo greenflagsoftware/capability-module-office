@@ -18,20 +18,44 @@ internal sealed class DocxExtractor : IContentExtractor
         if (part?.Document?.Body is not Body body)
             return new NormalizedDocument();
 
-        var paragraphs = body.Elements<Paragraph>().ToList();
-
         var paragraphTexts = new List<string>();
         var paragraphHeadings = new Dictionary<int, IReadOnlyList<string>>();
         var headingStack = new List<string>();
         var headingIndices = new HashSet<int>(); // which paragraph indices are actual headings
 
-        foreach (var (para, index) in paragraphs.Select((p, i) => (p, i)))
+        // Walk direct body children in document order so tables interleaved
+        // with paragraphs aren't skipped — body.Elements<Paragraph>() alone
+        // only sees top-level paragraphs and silently misses any Table
+        // (and everything nested in its cells).
+        var index = 0;
+        foreach (var element in body.ChildElements)
         {
-            var text = para.InnerText;
+            string text;
+            var isHeading = false;
+            var level = 0;
+
+            switch (element)
+            {
+                case Paragraph para:
+                    text = para.InnerText;
+                    var styleName = GetParagraphStyle(para);
+                    if (styleName is not null && TryGetHeadingLevel(styleName, out level))
+                        isHeading = true;
+                    break;
+
+                case Table table:
+                    text = SerializeTable(table);
+                    if (text.Length == 0)
+                        continue; // empty table — nothing to index, don't consume an index slot
+                    break;
+
+                default:
+                    continue; // e.g. SectionProperties — not indexable content
+            }
+
             paragraphTexts.Add(text);
 
-            var styleName = GetParagraphStyle(para);
-            if (styleName is not null && TryGetHeadingLevel(styleName, out var level))
+            if (isHeading)
             {
                 headingIndices.Add(index);
 
@@ -50,6 +74,8 @@ internal sealed class DocxExtractor : IContentExtractor
             {
                 paragraphHeadings[index] = headingStack.ToArray();
             }
+
+            index++;
         }
 
         var allText = string.Join(Environment.NewLine, paragraphTexts);
@@ -139,6 +165,32 @@ internal sealed class DocxExtractor : IContentExtractor
         }
 
         return chapters;
+    }
+
+    /// <summary>
+    /// Serializes a table into a single-line, pipe-delimited textual
+    /// representation (e.g. "[Table] Name | Role ; Alice | Engineer").
+    /// Deliberately kept on one line with no embedded newlines so chunking
+    /// (which splits chapter text on line breaks) can never tear a table
+    /// apart mid-row — this is what "kept intact rather than flattened into
+    /// surrounding prose" means in practice: the table survives as one
+    /// contiguous, recognizable unit instead of being silently dropped or
+    /// scattered across ordinary paragraphs.
+    /// </summary>
+    private static string SerializeTable(Table table)
+    {
+        var rows = new List<string>();
+        foreach (var row in table.Elements<TableRow>())
+        {
+            var cells = row.Elements<TableCell>()
+                .Select(c => c.InnerText.Trim())
+                .Where(c => c.Length > 0);
+            var rowText = string.Join(" | ", cells);
+            if (rowText.Length > 0)
+                rows.Add(rowText);
+        }
+
+        return rows.Count == 0 ? "" : "[Table] " + string.Join(" ; ", rows);
     }
 
     private static string? GetParagraphStyle(Paragraph para)

@@ -11,12 +11,21 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.13.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CapabilityModule.Office.Cli\CapabilityModule.Office.Cli.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ship the real migration scripts alongside the test binaries so the
+         Postgres integration tests apply the exact same schema the module
+         deploys, rather than a hand-maintained copy that can drift. -->
+    <None Include="..\..\db\migrations\*.sql" Link="db\migrations\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

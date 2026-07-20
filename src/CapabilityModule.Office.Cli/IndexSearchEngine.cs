@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Npgsql;
+using NpgsqlTypes;
 
 namespace CapabilityModule.Office.Cli;
 
@@ -120,6 +121,12 @@ internal static class IndexSearchEngine
 
         var queryVector = queryVectors[0];
 
+        // Anchor the subdirectory filter on a path-segment boundary (trailing
+        // slash) so scoping to "reports" doesn't also match "reports-legacy/...".
+        var pathPrefix = subdirectoryFilter is null
+            ? null
+            : subdirectoryFilter.TrimEnd('/', '\\') + "/";
+
         await using var dataSource = NpgsqlDataSource.Create(connectionString);
         await using var conn = await dataSource.OpenConnectionAsync();
         await using var cmd = conn.CreateCommand();
@@ -159,7 +166,14 @@ internal static class IndexSearchEngine
         cmd.Parameters.Add(new NpgsqlParameter { Value = query });
         cmd.Parameters.Add(new NpgsqlParameter
         {
-            Value = (object?)subdirectoryFilter ?? DBNull.Value
+            // NpgsqlDbType must be set explicitly here: when pathPrefix is null
+            // (the common case — no subdirectory scope), an untyped DBNull.Value
+            // leaves Postgres unable to infer $3's type from this query shape,
+            // and the query fails with "42P08: could not determine data type of
+            // parameter $3" — a real bug this parameter had until an integration
+            // test against a live database caught it.
+            NpgsqlDbType = NpgsqlDbType.Text,
+            Value = (object?)pathPrefix ?? DBNull.Value
         });
         cmd.Parameters.Add(new NpgsqlParameter { Value = VectorWeight });
         cmd.Parameters.Add(new NpgsqlParameter { Value = KeywordWeight });

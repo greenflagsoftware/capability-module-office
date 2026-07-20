@@ -174,6 +174,79 @@ public class EmbeddingTests
     }
 
     // ---------------------------------------------------------------
+    // EmbeddingProviderFactory — config-driven provider selection
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void Factory_NoEnvVarSet_DefaultsToOpenAI()
+    {
+        using var _ = WithEnv("EMBEDDING_PROVIDER", null);
+        using var __ = WithEnv("OPENAI_API_KEY", "test-key");
+
+        var provider = EmbeddingProviderFactory.Create();
+
+        Assert.IsType<OpenAIEmbeddingProvider>(provider);
+    }
+
+    [Fact]
+    public void Factory_ExplicitOpenAI_ReturnsOpenAIProvider()
+    {
+        using var _ = WithEnv("EMBEDDING_PROVIDER", "openai");
+        using var __ = WithEnv("OPENAI_API_KEY", "test-key");
+
+        var provider = EmbeddingProviderFactory.Create();
+
+        Assert.IsType<OpenAIEmbeddingProvider>(provider);
+    }
+
+    [Fact]
+    public void Factory_CaseInsensitive_ReturnsOpenAIProvider()
+    {
+        using var _ = WithEnv("EMBEDDING_PROVIDER", "OpenAI");
+        using var __ = WithEnv("OPENAI_API_KEY", "test-key");
+
+        var provider = EmbeddingProviderFactory.Create();
+
+        Assert.IsType<OpenAIEmbeddingProvider>(provider);
+    }
+
+    [Fact]
+    public void Factory_UnknownProvider_ThrowsWithSupportedListInMessage()
+    {
+        using var _ = WithEnv("EMBEDDING_PROVIDER", "voyage");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => EmbeddingProviderFactory.Create());
+
+        Assert.Contains("voyage", ex.Message);
+        Assert.Contains("openai", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Temporarily sets an environment variable, restoring its prior value on dispose.
+    /// Keeps env-var-dependent tests from leaking state into other tests.
+    /// </summary>
+    private static IDisposable WithEnv(string name, string? value)
+    {
+        var previous = Environment.GetEnvironmentVariable(name);
+        Environment.SetEnvironmentVariable(name, value);
+        return new EnvRestorer(name, previous);
+    }
+
+    private sealed class EnvRestorer : IDisposable
+    {
+        private readonly string _name;
+        private readonly string? _previous;
+
+        public EnvRestorer(string name, string? previous)
+        {
+            _name = name;
+            _previous = previous;
+        }
+
+        public void Dispose() => Environment.SetEnvironmentVariable(_name, _previous);
+    }
+
+    // ---------------------------------------------------------------
     // IndexEngine embedding integration (skip-already-embedded)
     // ---------------------------------------------------------------
 
