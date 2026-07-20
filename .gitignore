@@ -315,6 +315,9 @@ FakesAssemblies/
 .ntvs_analysis.dat
 node_modules/
 
+# SPA build output
+web/dist/
+
 # Visual Studio 6 build log
 *.plg
 

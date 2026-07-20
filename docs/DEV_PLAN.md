@@ -634,15 +634,15 @@ to gate on this.
 - No authentication (per the architecture note above) — this is a UI-only phase, no new access
   control introduced here.
 - Exit criteria:
-  - [ ] SPA scaffolded under `web/`, builds standalone
-  - [ ] document list/search page, calling Phase 13's search endpoint (both filename and
+  - [x] SPA scaffolded under `web/`, builds standalone
+  - [x] document list/search page, calling Phase 13's search endpoint (both filename and
     semantic/hybrid search)
-  - [ ] preview pane showing extracted text for a selected document
-  - [ ] upload dialog, round-tripped against a real file end to end through Phase 13's endpoint
-  - [ ] edit (find/replace) dialog, round-tripped end to end (blocked until Phase 13's edit
+  - [x] preview pane showing extracted text for a selected document
+  - [x] upload dialog, round-tripped against a real file end to end through Phase 13's endpoint
+  - [x] edit (find/replace) dialog, round-tripped end to end (blocked until Phase 13's edit
     endpoint is unblocked by Phase 6)
-  - [ ] delete flow with a confirmation step before calling the delete endpoint
-  - [ ] production build's static assets are served from the `WebApi` project; verified via
+  - [x] delete flow with a confirmation step before calling the delete endpoint
+  - [x] production build's static assets are served from the `WebApi` project; verified via
     `docker compose up --build`
 
 ## Reference

@@ -21,6 +21,16 @@ RUN dotnet restore src/CapabilityModule.Office.WebApi/CapabilityModule.Office.We
 COPY src/ src/
 
 # =============================================================================
+# Stage 1a: SPA build
+# =============================================================================
+FROM node:22-alpine AS spa-build
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ .
+RUN npm run build
+
+# =============================================================================
 # Stage 2: MCP module runtime
 # =============================================================================
 FROM build AS module-build
@@ -62,6 +72,9 @@ RUN mkdir -p /data && chown app:app /data
 USER app
 
 COPY --from=webapi-build --chown=app:app /app/publish .
+
+# Copy the SPA build output into wwwroot so the WebApi serves it as static content
+COPY --from=spa-build --chown=app:app /web/dist /app/wwwroot
 
 ENV ASPNETCORE_URLS=http://+:8080
 ENV OFFICE_CLI_ROOT=/data

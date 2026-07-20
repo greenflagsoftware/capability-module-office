@@ -11,6 +11,17 @@ builder.WebHost.ConfigureKestrel(options =>
 
 var app = builder.Build();
 
+// Serve the SPA's static files (production build output from wwwroot).
+// ASP.NET Core's default static files middleware looks for wwwroot under
+// the content root path, so the Docker COPY of web/dist/ to /app/wwwroot
+// is picked up automatically.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+// SPA fallback: serve index.html for any non-API route so client-side
+// navigation (or a direct page reload) returns the app shell.
+app.MapFallbackToFile("index.html");
+
 // Resolve the CLI root once — used by all endpoints for path security
 string ResolveRoot()
 {

@@ -37,4 +37,12 @@
     <Copy SourceFiles="@(CliFiles)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
   </Target>
 
+  <!-- Copy SPA build output to wwwroot on publish (only runs if the SPA was already built) -->
+  <Target Name="CopySpaOutputForPublish" AfterTargets="Publish" Condition="Exists('$(ProjectDir)..\..\web\dist\index.html')">
+    <ItemGroup>
+      <SpaFiles Include="$(ProjectDir)..\..\web\dist\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SpaFiles)" DestinationFolder="$(PublishDir)\wwwroot\%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>
