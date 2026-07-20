@@ -28,8 +28,9 @@ internal static class EmbeddingProviderFactory
         return providerName switch
         {
             "openai" => new OpenAIEmbeddingProvider(),
+            "openrouter" => new OpenRouterEmbeddingProvider(),
             _ => throw new InvalidOperationException(
-                $"Unknown EMBEDDING_PROVIDER '{providerName}'. Supported providers: {DefaultProvider}. " +
+                $"Unknown EMBEDDING_PROVIDER '{providerName}'. Supported providers: {DefaultProvider}, openrouter. " +
                 "Unset EMBEDDING_PROVIDER to use the default, or add an implementation for this value.")
         };
     }

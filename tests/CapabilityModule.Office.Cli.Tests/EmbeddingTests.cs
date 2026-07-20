@@ -174,6 +174,130 @@ public class EmbeddingTests
     }
 
     // ---------------------------------------------------------------
+    // OpenRouterEmbeddingProvider tests (with mocked HTTP)
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task OpenRouterEmbeddingProvider_EmbedsSingleText()
+    {
+        var handler = new MockHttpHandler(async request =>
+        {
+            var body = await request.Content!.ReadAsStringAsync();
+            Assert.Contains("openai/text-embedding-3-small", body);
+            Assert.Contains("Hello world", body);
+            Assert.Equal("/api/v1/embeddings", request.RequestUri?.AbsolutePath);
+            Assert.Equal("Bearer test-key", request.Headers.Authorization?.ToString());
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"data":[{"index":0,"embedding":[0.1,0.2,0.3]}]}"""),
+            };
+        });
+
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://openrouter.ai/api/v1/"),
+        };
+        using var provider = new OpenRouterEmbeddingProvider(httpClient);
+
+        var result = await provider.EmbedAsync(new[] { "Hello world" });
+
+        Assert.Single(result);
+        Assert.Equal(3, result[0].Span.Length);
+        Assert.Equal(0.1f, result[0].Span[0]);
+    }
+
+    [Fact]
+    public async Task OpenRouterEmbeddingProvider_UsesConfiguredModel()
+    {
+        var handler = new MockHttpHandler(async request =>
+        {
+            var body = await request.Content!.ReadAsStringAsync();
+            Assert.Contains("cohere/embed-english-v3.0", body);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"data":[{"index":0,"embedding":[1.0]}]}"""),
+            };
+        });
+
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://openrouter.ai/api/v1/"),
+        };
+        using var provider = new OpenRouterEmbeddingProvider(httpClient, model: "cohere/embed-english-v3.0");
+
+        await provider.EmbedAsync(new[] { "test" });
+    }
+
+    [Fact]
+    public async Task OpenRouterEmbeddingProvider_EmptyInput_ReturnsEmpty()
+    {
+        using var httpClient = new HttpClient(new MockHttpHandler(_ =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[]")
+            })))
+        {
+            BaseAddress = new Uri("https://openrouter.ai/api/v1/"),
+        };
+        using var provider = new OpenRouterEmbeddingProvider(httpClient);
+
+        var result = await provider.EmbedAsync(Array.Empty<string>());
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task OpenRouterEmbeddingProvider_ApiError_Throws()
+    {
+        var handler = new MockHttpHandler(async _ =>
+            new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                Content = new StringContent("{\"error\":\"invalid_api_key\"}"),
+            });
+
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://openrouter.ai/api/v1/"),
+        };
+        using var provider = new OpenRouterEmbeddingProvider(httpClient);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => provider.EmbedAsync(new[] { "test" }));
+        Assert.Contains("Unauthorized", ex.Message);
+        Assert.Contains("invalid_api_key", ex.Message);
+    }
+
+    [Fact]
+    public void OpenRouterEmbeddingProvider_NoApiKey_Throws()
+    {
+        var existingKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
+        try
+        {
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", null);
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => new OpenRouterEmbeddingProvider());
+            Assert.Contains("OPENROUTER_API_KEY", ex.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", existingKey);
+        }
+    }
+
+    [Fact]
+    public void OpenRouterEmbeddingProvider_DefaultModel_Is1536Dimensional()
+    {
+        // Documents the dimension the default model produces, matching the
+        // vector(1536) column — not something the provider enforces at
+        // runtime, but a schema-compatibility contract worth locking in.
+        Assert.Equal(1536, OpenRouterEmbeddingProvider.DefaultDimension);
+    }
+
+    // ---------------------------------------------------------------
     // EmbeddingProviderFactory — config-driven provider selection
     // ---------------------------------------------------------------
 
@@ -219,6 +343,17 @@ public class EmbeddingTests
 
         Assert.Contains("voyage", ex.Message);
         Assert.Contains("openai", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Factory_ExplicitOpenRouter_ReturnsOpenRouterProvider()
+    {
+        using var _ = WithEnv("EMBEDDING_PROVIDER", "openrouter");
+        using var __ = WithEnv("OPENROUTER_API_KEY", "test-key");
+
+        var provider = EmbeddingProviderFactory.Create();
+
+        Assert.IsType<OpenRouterEmbeddingProvider>(provider);
     }
 
     /// <summary>

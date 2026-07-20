@@ -484,6 +484,17 @@ type of parameter`. Fixed by setting `NpgsqlDbType.Text` explicitly. **Requires 
 locally** (same requirement as `docker compose up` for this module); there is no CI pipeline yet
 to gate on this.
 
+**Note on the OpenRouter provider (added post-Phase-10).** A second `IEmbeddingProvider`
+implementation, `OpenRouterEmbeddingProvider`, was added for callers who have an OpenRouter key
+but no direct OpenAI API key — OpenRouter added an OpenAI-compatible `/embeddings` endpoint that
+can itself route to `openai/text-embedding-3-small`, so this stays 1536-dimensional and needs no
+schema change. Selected via `EMBEDDING_PROVIDER=openrouter` with `OPENROUTER_API_KEY` set (see
+`.env.example`); the routed model is overridable via `OPENROUTER_EMBEDDING_MODEL` but changing it
+to a model with different output dimensionality requires a schema migration and a full re-index —
+this is exactly the "switching providers means re-embedding from scratch" caveat this plan already
+called out for `IEmbeddingProvider` in general, not a new constraint. No `docker-compose.yml`
+changes were needed since both `module` and `webapi` already load `.env` via `env_file`.
+
 ### Phase 11 — Semantic + hybrid search
 
 - Deliverable: `index search` CLI command that queries the index — embeds the query text via the
