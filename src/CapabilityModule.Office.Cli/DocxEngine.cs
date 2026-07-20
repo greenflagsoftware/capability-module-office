@@ -12,6 +12,40 @@ namespace CapabilityModule.Office.Cli;
 internal static class DocxEngine
 {
     /// <summary>
+    /// Performs a find-and-replace text substitution within a .docx document.
+    /// Opens the file for editing, walks all paragraphs/runs, and replaces
+    /// occurrences of <paramref name="findText"/> with <paramref name="replaceText"/>
+    /// within each run's text content.
+    ///
+    /// Note: OpenXml does not offer a clean partial in-place text patch, so this
+    /// rebuilds the whole document in memory when saved — see DEV_PLAN.md for
+    /// the implementation detail vs. contract distinction.
+    ///
+    /// If <paramref name="findText"/> is split across multiple runs (e.g. due to
+    /// formatting boundaries), it will not be matched — this is a known limitation
+    /// of the per-run traversal approach.
+    /// </summary>
+    public static void ReplaceText(string filePath, string findText, string replaceText)
+    {
+        using var doc = WordprocessingDocument.Open(filePath, true);
+        var part = doc.MainDocumentPart;
+        if (part?.Document?.Body is not Body body) return;
+
+        foreach (var para in body.Elements<Paragraph>())
+        {
+            foreach (var run in para.Elements<Run>())
+            {
+                var text = run.GetFirstChild<Text>();
+                if (text != null && text.Text.Contains(findText, StringComparison.Ordinal))
+                {
+                    text.Text = text.Text.Replace(findText, replaceText);
+                }
+            }
+        }
+
+        part.Document.Save();
+    }
+    /// <summary>
     /// Extracts all plain text from a .docx file, preserving paragraph breaks.
     /// </summary>
     public static string ReadText(string filePath)

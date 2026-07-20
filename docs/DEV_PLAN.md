@@ -298,21 +298,21 @@ escaped string, which sidesteps manual escaping entirely.
   `docx read`/`info`/`search`; the versioning mechanism above is this module's answer to that
   for `docx replace` specifically.
 - Exit criteria:
-  - [ ] `docx replace <path>` command added, taking a single find/replace text pair (not a
+  - [x] `docx replace <path>` command added, taking a single find/replace text pair (not a
     batch — one substitution per call, matching current scope)
-  - [ ] before overwriting, the pre-edit content is snapshotted to the version store described
+  - [x] before overwriting, the pre-edit content is snapshotted to the version store described
     above, with an incrementing version number
-  - [ ] the target file is overwritten with the substitution applied; non-matching content is
+  - [x] the target file is overwritten with the substitution applied; non-matching content is
     verifiably unchanged (this is the check that distinguishes edit correctness from `create`'s)
-  - [ ] JSON output includes the edited file's path/resolved location, the version number and
+  - [x] JSON output includes the edited file's path/resolved location, the version number and
     version path written, and the file's last-write timestamp (UTC, ISO 8601) after the
     overwrite, consistent with other commands' reference-composability contract
-  - [ ] rejects a path that traverses outside the restricted root, and a find/replace on a
+  - [x] rejects a path that traverses outside the restricted root, and a find/replace on a
     nonexistent file, each with a non-zero exit code
-  - [ ] errors surface via exit code/stderr, not folded into the JSON payload
-  - [ ] MCP tool wired per Phase 3's pattern (alongside `DocxTools.cs`), `module.manifest.json`
+  - [x] errors surface via exit code/stderr, not folded into the JSON payload
+  - [x] MCP tool wired per Phase 3's pattern (alongside `DocxTools.cs`), `module.manifest.json`
     updated
-  - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering both the substitution and
+  - [x] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` covering both the substitution and
     the versioning behavior; MCP-adapter tests under `tests/CapabilityModule.Office.Tests/`
 
 ### Phase 7 — Indexing infrastructure (Postgres + pgvector)

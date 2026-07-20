@@ -11,6 +11,7 @@ internal sealed class DocxCommand
         cmd.AddCommand(ReadSubCommand());
         cmd.AddCommand(CreateSubCommand());
         cmd.AddCommand(InfoSubCommand());
+        cmd.AddCommand(ReplaceSubCommand());
 
         return cmd;
     }
@@ -164,6 +165,71 @@ internal sealed class DocxCommand
                 Environment.Exit(3);
             }
         }, pathArg, rootOpt);
+
+        return cmd;
+    }
+
+    private static Command ReplaceSubCommand()
+    {
+        var pathArg = new Argument<string>("path", "Path to the .docx file (relative to the restricted root).");
+        var findOpt = new Option<string>("--find", "The text to find in the document.");
+        var replaceOpt = new Option<string>("--replace", () => string.Empty, "The replacement text.");
+        var rootOpt = SharedOptions.RootOption();
+
+        var cmd = new Command("replace", "Find and replace text in a .docx document. The original file is versioned before overwriting.")
+        {
+            pathArg, findOpt, replaceOpt, rootOpt,
+        };
+
+        cmd.SetHandler((string path, string find, string replace, string rootOverride) =>
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(find))
+                {
+                    Console.Error.WriteLine("error: --find must not be empty.");
+                    Environment.Exit(1);
+                }
+
+                var root = PathSecurity.EffectiveRoot(rootOverride);
+                var fullPath = PathSecurity.ResolveWithinRoot(root, path);
+
+                if (!File.Exists(fullPath))
+                {
+                    Console.Error.WriteLine($"error: file not found: {path}");
+                    Environment.Exit(1);
+                }
+
+                // Snapshot the pre-edit content to the version store
+                var (version, versionPath) = VersionStore.Snapshot(fullPath, root, path);
+
+                // Perform the find-and-replace
+                DocxEngine.ReplaceText(fullPath, find, replace);
+
+                // Read the last-write timestamp after the overwrite
+                var lastWriteUtc = File.GetLastWriteTimeUtc(fullPath);
+
+                var result = new Dictionary<string, object?>
+                {
+                    ["path"] = path,
+                    ["resolved"] = fullPath,
+                    ["version"] = version,
+                    ["versionPath"] = versionPath,
+                    ["lastModifiedUtc"] = lastWriteUtc.ToString("O"),
+                };
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(result));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Console.Error.WriteLine($"error: {ex.Message}");
+                Environment.Exit(2);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"error: {ex.Message}");
+                Environment.Exit(3);
+            }
+        }, pathArg, findOpt, replaceOpt, rootOpt);
 
         return cmd;
     }

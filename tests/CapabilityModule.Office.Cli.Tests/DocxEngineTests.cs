@@ -88,4 +88,96 @@ public class DocxEngineTests : IDisposable
 
         Assert.Throws<InvalidDataException>(() => DocxEngine.GetInfo(file));
     }
+
+    [Fact]
+    public void ReplaceText_SimpleFindReplace_SubstitutesCorrectly()
+    {
+        var file = PathFor("replace-simple.docx");
+        DocxEngine.Create(file, "Title", "Hello world, this is a test.");
+
+        DocxEngine.ReplaceText(file, "world", "universe");
+        var text = DocxEngine.ReadText(file);
+
+        Assert.Contains("Hello universe", text);
+        Assert.DoesNotContain("Hello world", text);
+    }
+
+    [Fact]
+    public void ReplaceText_NoMatch_DoesNotChangeContent()
+    {
+        var file = PathFor("replace-nomatch.docx");
+        DocxEngine.Create(file, "Title", "This is the original content.");
+
+        var before = DocxEngine.ReadText(file);
+        DocxEngine.ReplaceText(file, "nonexistent", "replacement");
+        var after = DocxEngine.ReadText(file);
+
+        Assert.Equal(before, after);
+    }
+
+    [Fact]
+    public void ReplaceText_MultipleOccurrences_ReplacesAll()
+    {
+        var file = PathFor("replace-multiple.docx");
+        DocxEngine.Create(file, "Title", "foo foo foo");
+
+        DocxEngine.ReplaceText(file, "foo", "bar");
+        var text = DocxEngine.ReadText(file);
+
+        Assert.Equal(3, text.Split("bar").Length - 1); // 3 occurrences of "bar"
+        Assert.DoesNotContain("foo", text);
+    }
+
+    [Fact]
+    public void ReplaceText_EmptyReplacement_DeletesMatches()
+    {
+        var file = PathFor("replace-delete.docx");
+        DocxEngine.Create(file, "Title", "Keep this part and remove this part.");
+
+        DocxEngine.ReplaceText(file, "part", "");
+        var text = DocxEngine.ReadText(file);
+
+        Assert.Contains("Keep this  and remove this .", text);
+    }
+
+    [Fact]
+    public void ReplaceText_ReplaceInTitle_Works()
+    {
+        var file = PathFor("replace-title.docx");
+        DocxEngine.Create(file, "My Document Title", "Body content.");
+
+        DocxEngine.ReplaceText(file, "Document", "Report");
+        var text = DocxEngine.ReadText(file);
+
+        Assert.Contains("My Report Title", text);
+        Assert.DoesNotContain("My Document Title", text);
+    }
+
+    [Fact]
+    public void ReplaceText_NonMatchingContent_IsVerifiablyUnchanged()
+    {
+        // This is the check that distinguishes edit correctness from create's:
+        // non-matching paragraphs should be untouched.
+        var file = PathFor("replace-unchanged-check.docx");
+        DocxEngine.Create(file, "Title", "First paragraph.\nSecond paragraph with change.\nThird paragraph.");
+
+        DocxEngine.ReplaceText(file, "Second paragraph with change", "Second paragraph was changed");
+
+        var text = DocxEngine.ReadText(file);
+        Assert.Contains("First paragraph.", text);
+        Assert.Contains("Second paragraph was changed", text);
+        Assert.Contains("Third paragraph.", text);
+    }
+
+    [Fact]
+    public void ReplaceText_BackslashesInContent_RoundTrips()
+    {
+        var file = PathFor("replace-backslash.docx");
+        DocxEngine.Create(file, "Title", @"Path is C:\Users\test\file.txt");
+
+        DocxEngine.ReplaceText(file, "test", "prod");
+        var text = DocxEngine.ReadText(file);
+
+        Assert.Contains(@"C:\Users\prod\file.txt", text);
+    }
 }

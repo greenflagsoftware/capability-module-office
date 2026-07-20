@@ -149,4 +149,29 @@ public static class DocxTools
 
         return $"Paragraphs: {paraCount}\nWords: {wordCount}\nCharacters: {charCount}";
     }
+
+    [McpServerTool, Description("Find and replace text in a .docx document. The original file is versioned before overwriting, so the previous content is recoverable.")]
+    public static async Task<string> DocxReplace(
+        [Description("Path to the .docx file, relative to the restricted root.")] string path,
+        [Description("The text to find in the document.")] string find,
+        [Description("The replacement text (empty string to delete matches).")] string replace)
+    {
+        ValidatePath(path, nameof(path));
+
+        if (string.IsNullOrWhiteSpace(find))
+        {
+            throw new ArgumentException("Find text must not be null or empty.", nameof(find));
+        }
+
+        using var doc = await CallCliAsync(BuildArgs(
+            "docx", "replace", path, "--find", find ?? string.Empty, "--replace", replace ?? string.Empty));
+
+        var root = doc.RootElement;
+        var resolved = root.TryGetProperty("resolved", out var r) ? r.GetString() : path;
+        var version = root.TryGetProperty("version", out var v) ? v.GetInt32() : 0;
+        var versionPath = root.TryGetProperty("versionPath", out var vp) ? vp.GetString() : "";
+        var lastModifiedUtc = root.TryGetProperty("lastModifiedUtc", out var lm) ? lm.GetString() : "";
+
+        return $"Replaced text in {resolved}. Version {version} saved to {versionPath}. Last modified: {lastModifiedUtc}";
+    }
 }

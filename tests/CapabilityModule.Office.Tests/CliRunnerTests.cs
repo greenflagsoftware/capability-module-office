@@ -180,4 +180,40 @@ public class DocxToolsValidationTests
 
         Assert.Contains("path", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task DocxReplace_NullOrEmptyPath_ThrowsArgumentException(string? invalidPath)
+    {
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            Tools.DocxTools.DocxReplace(invalidPath!, "find", "replace"));
+
+        Assert.Contains("path", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task DocxReplace_NullOrEmptyFind_ThrowsArgumentException(string? invalidFind)
+    {
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            Tools.DocxTools.DocxReplace("test.docx", invalidFind!, "replace"));
+
+        Assert.Contains("find", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DocxReplace_ValidArgs_ReachesCliLayer_NotValidationError()
+    {
+        // Should not throw ArgumentException — validation passes.
+        // The CLI call will fail with some other error (file not found, etc.)
+        var ex = await Record.ExceptionAsync(() =>
+            Tools.DocxTools.DocxReplace("test.docx", "find", "replace"));
+
+        Assert.NotNull(ex);
+        Assert.IsNotType<ArgumentException>(ex);
+    }
 }
