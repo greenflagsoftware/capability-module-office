@@ -17,6 +17,7 @@ function AppInner() {
   const [showUpload, setShowUpload] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
 
   const loadDocument = useCallback(async (path: string) => {
     setLoadingPreview(true);
@@ -80,6 +81,26 @@ function AppInner() {
     [loadDocument, showToast],
   );
 
+  const handleReindex = useCallback(async () => {
+    setReindexing(true);
+    try {
+      const summary = await indexBuild();
+      showToast(
+        summary.filesWithErrors > 0
+          ? `Reindexed with ${summary.filesWithErrors} error(s) — ${summary.filesIndexed} file(s) updated`
+          : `Reindexed: ${summary.filesIndexed} updated, ${summary.filesUnchanged} unchanged`,
+        summary.filesWithErrors > 0 ? "error" : "success",
+      );
+    } catch (err) {
+      showToast(
+        err instanceof Error ? `Reindex failed: ${err.message}` : "Reindex failed",
+        "error",
+      );
+    } finally {
+      setReindexing(false);
+    }
+  }, [showToast]);
+
   const handleDelete = useCallback(async () => {
     if (!selectedPath) return;
     try {
@@ -107,6 +128,37 @@ function AppInner() {
       <header className="app-header">
         <h1>Office Documents</h1>
         <div className="header-actions">
+          <button
+            className="btn"
+            onClick={handleReindex}
+            disabled={reindexing}
+            title="Rebuild the search index for the whole document root"
+          >
+            {reindexing ? (
+              <>
+                <span className="spinner" />
+                Reindexing...
+              </>
+            ) : (
+              <>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M23 4v6h-6" />
+                  <path d="M1 20v-6h6" />
+                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                </svg>
+                Reindex
+              </>
+            )}
+          </button>
           <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
             <svg
               width="14"
