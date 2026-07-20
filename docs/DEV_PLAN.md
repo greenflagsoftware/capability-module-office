@@ -108,6 +108,17 @@ connecting fresh per call) — that's about the MCP session, not the backing sto
 adapter remains a thin front end, now over two things it shells/queries out to (the CLI binary,
 and Postgres) instead of one.
 
+**The web UI (Phase 14+) is this module's first non-VTC consumption surface.** Every phase
+through Phase 13 is consumed exactly one way: VTC calls MCP tools, which shell out to the CLI.
+Phase 14 adds a browser-facing REST API, and Phase 15 a React/TS single-page app on top of it —
+a second, independent way to reach the same CLI capabilities. This does not change "no upward
+references" (the web UI still knows nothing about VTC/personas) but it does mean the CLI's
+capabilities now have two front ends (MCP adapter, web API) shelling out to the same binary. Per
+the R&D-stage decision recorded in Phase 14, the web UI ships with **no authentication** —
+consistent with this module's existing entitlement-via-running-container trust model (the
+network/container boundary is the security boundary today, same as MCP access). Revisit if this
+UI is ever exposed beyond a trusted network.
+
 ## Phase Plan
 
 ### Phase 0 — CLI scaffold
@@ -510,6 +521,129 @@ to gate on this.
     `module.manifest.json` updated (added `index_build` and `index_search`)
   - [x] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` (record shape, input validation,
     constants); MCP-adapter tests under `tests/CapabilityModule.Office.Tests/` (input validation)
+
+### Phase 12 — File management primitives (upload, delete)
+
+- Deliverable: round out the CLI's CRUD surface with the two operations it's missing —
+  ingesting an existing file's raw bytes (`upload`) and removing a stored file (`delete`).
+  Everything through Phase 11 can create documents from scratch (`docx create`) or edit them
+  in place (`write`, `docx replace`), but there is no way to bring an *existing* file's actual
+  bytes (a `.docx`/`.pdf`/etc. the caller already has) into the restricted root, and no way to
+  remove one. Both are needed before the web UI (Phase 14/15) can offer a real upload/delete
+  experience.
+- **`upload <path>`:** binary-safe write. `write` (Phase 1) uses `File.WriteAllText` and is
+  scoped to text content; `upload` instead accepts base64-encoded content (via `--content-base64`
+  or base64 text piped over stdin) and writes the decoded bytes with `File.WriteAllBytes`. Base64
+  is the transport specifically because both of this command's callers — an MCP tool argument
+  (JSON string) and, later, the web UI backend (Phase 14, re-encoding a multipart file upload) —
+  can only pass text, not raw bytes, through their respective call boundaries.
+  - Same `--mode create|overwrite` semantics as `write`. An `overwrite` of an existing file
+    snapshots the pre-upload content to the Phase 6 version store first, using the same
+    `_versions/` convention — mutating existing stored content gets versioned regardless of
+    which command did the mutating, not just `docx replace`.
+  - No file-type restriction — `upload` doesn't parse or validate the bytes as any particular
+    format (that's the extraction adapters' job, Phase 8, if/when the file is indexed). An
+    unreadable/corrupt upload of a claimed type is only caught later, if something tries to
+    extract from it.
+  - A configurable max upload size is enforced (reject oversized uploads with a clear error
+    rather than an unbounded in-memory base64 decode) — default TBD, follow Phase 4's precedent
+    of a sensible default that's easy to override via config, not a hardcoded constant.
+  - Does not auto-trigger `index build` — consistent with Phase 11's existing deferred
+    reindex-on-write behavior for `docx create`/`docx replace`.
+- **`delete <path>`:** removes a file from the restricted root. Per the method-safety/
+  reversibility gating in `agentic_guidance.xml` (already applied to `docx replace` in Phase 6),
+  this is **not** a hard delete — it snapshots the file to the Phase 6 version store (as its
+  final version) and then removes it from its original location, so the content is recoverable
+  via the version store rather than being unrecoverably gone. A true hard-delete/purge of version
+  history is explicitly out of scope here (no command for it yet).
+  - Deleting a path that doesn't exist, or one outside the restricted root, is a non-zero-exit
+    error, not a silent no-op.
+- Exit criteria:
+  - [ ] `upload <path>` command added, accepting base64 content via `--content-base64` or stdin
+  - [ ] `upload` decodes and writes bytes correctly for a real binary fixture (round-tripped
+    against a `.docx` and a `.pdf`, not just plain text)
+  - [ ] `upload --mode overwrite` on an existing file snapshots the pre-upload content to the
+    version store before overwriting
+  - [ ] oversized upload content is rejected with a clear non-zero-exit error rather than
+    silently truncated or OOM-ing the process
+  - [ ] `delete <path>` command added; deleting snapshots to the version store, then removes the
+    file from its original location
+  - [ ] `delete` on a nonexistent path, or a path outside the restricted root, exits non-zero
+    with a clear error
+  - [ ] both commands emit machine-readable (JSON) output on stdout, consistent with the CLI's
+    existing contract (path/resolved location; `upload` includes bytes written and, when
+    versioned, the version number/path; `delete` includes the version path the content was
+    snapshotted to)
+  - [ ] MCP tools wired per Phase 3's pattern (new tool class, e.g. `FileTools.cs`),
+    `module.manifest.json` updated with `upload_file` / `delete_file`
+  - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` (binary round-trip, oversized
+    rejection, versioned-overwrite, versioned-delete, path-traversal rejection); MCP-adapter
+    tests under `tests/CapabilityModule.Office.Tests/`
+
+### Phase 13 — Web UI backend API
+
+- Deliverable: a new ASP.NET Core project, **`src/CapabilityModule.Office.WebApi`** (proposed
+  name — flag if you want something else before this is built), exposing a REST API that a
+  browser SPA can call directly (no MCP protocol involved). Same CLI-first pattern as the MCP
+  adapter: each endpoint shells out to the CLI via a `CliRunner`-equivalent rather than
+  reimplementing any logic, so the web UI and MCP stay two front ends over one CLI, not two
+  divergent implementations.
+- Decided (per the architecture note above): standalone project/container, not new endpoints
+  bolted onto the existing MCP sidecar — keeps the MCP host's container/health/scaling profile
+  unchanged, at the cost of a second service to build/deploy/health-check. No authentication in
+  this phase (see architecture note above).
+- Endpoint surface (each wraps an existing or Phase-12 CLI command — no new CLI capability
+  introduced by this phase):
+  - Search — wraps `search` (Phase 5, filename) and `index search` (Phase 11, semantic/hybrid).
+  - View — wraps `read`/`docx read` (Phase 1/2) to return extracted text for preview. Full-
+    fidelity in-browser rendering (preserving original Word layout/formatting) is explicitly
+    deferred — this phase returns extracted text, not a rendered document.
+  - Upload — wraps `upload` (Phase 12), accepting a multipart/form-data file from the browser
+    and re-encoding it to base64 before invoking the CLI.
+  - Edit — wraps `docx replace` (Phase 6). **This endpoint has a hard dependency on Phase 6
+    shipping first** — as of this writing Phase 6's exit criteria are unchecked, so this
+    endpoint cannot be built until that command exists. Scoped to the same find/replace
+    primitive Phase 6 offers, not free-form rich-text editing.
+  - Delete — wraps `delete` (Phase 12).
+- Exit criteria:
+  - [ ] `src/CapabilityModule.Office.WebApi` builds standalone with `dotnet build`
+  - [ ] `/health` endpoint, consistent with the existing module's health-check convention
+  - [ ] search endpoint returns results from both filename search and semantic/hybrid search
+  - [ ] view endpoint returns extracted text for a stored document
+  - [ ] upload endpoint accepts a multipart file and stores it via the Phase 12 `upload` command
+  - [ ] edit endpoint performs a find/replace via `docx replace` (blocked until Phase 6 lands)
+  - [ ] delete endpoint removes a stored file via the Phase 12 `delete` command
+  - [ ] all endpoints reject paths outside the restricted root with a clear error status, not a
+    500 or a silent no-op
+  - [ ] added as a new service in `docker-compose.yml`
+  - [ ] integration/adapter tests under a new `tests/CapabilityModule.Office.WebApi.Tests/`
+    project, following the existing MCP-adapter test pattern
+
+### Phase 14 — Web UI frontend
+
+- Deliverable: a React/TypeScript single-page app (proposed location: `web/`, sibling to `src/`
+  — flag if you want it elsewhere) consuming the Phase 13 REST API. Views: a document
+  list/search page, a read-only preview pane (extracted text, per Phase 13's scoping), an upload
+  dialog, an edit (find/replace) dialog, and delete with a confirmation step (delete is
+  recoverable via the version store per Phase 12, but the UI still confirms before calling it —
+  it's still a destructive-feeling action from the user's perspective).
+- Decided: production build serves the compiled static SPA assets from the Phase 13 `WebApi`
+  project (one container for the whole web UI, separate from the MCP sidecar container per the
+  architecture note above) rather than running a separate frontend server/container. Local dev
+  can still use the SPA's own dev server against the API for hot reload.
+- No authentication (per the architecture note above) — this is a UI-only phase, no new access
+  control introduced here.
+- Exit criteria:
+  - [ ] SPA scaffolded under `web/`, builds standalone
+  - [ ] document list/search page, calling Phase 13's search endpoint (both filename and
+    semantic/hybrid search)
+  - [ ] preview pane showing extracted text for a selected document
+  - [ ] upload dialog, round-tripped against a real file end to end through Phase 13's endpoint
+  - [ ] edit (find/replace) dialog, round-tripped end to end (blocked until Phase 13's edit
+    endpoint is unblocked by Phase 6)
+  - [ ] delete flow with a confirmation step before calling the delete endpoint
+  - [ ] production build's static assets are served from the `WebApi` project; verified via
+    `docker compose up --build`
 
 ## Reference
 
