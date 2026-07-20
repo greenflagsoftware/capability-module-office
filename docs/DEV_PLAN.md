@@ -685,6 +685,59 @@ gaps above.
   - [x] production build's static assets are served from the `WebApi` project; verified via
     `docker compose up --build`
 
+### Phase 15 — Filename-search case-sensitivity fix + content search as the default
+
+- Motivation: a real usage session surfaced that filename search — the default mode, and so the
+  first thing anyone tries — silently fails on case mismatches, and even when it works it only
+  ever matches names, not content. Confirmed against live data: a real uploaded document
+  (`Bread Sale Agreement.docx`) was fully indexed (14 chunks, all embedded via the configured
+  provider, keyword tsvector correctly containing `bread`), and querying the index directly for
+  `bread` returned 10 correctly-ranked hybrid-search results. Filename search for the same query
+  returned zero — `q=bread` → `totalResults: 0`, `q=Bread` → `totalResults: 1`, same file, no
+  other difference. Root cause: `SearchEngine.Search`
+  (`src/CapabilityModule.Office.Cli/SearchEngine.cs`) calls
+  `Directory.EnumerateFiles(directory, searchPattern, SearchOption.AllDirectories)` with no
+  explicit `EnumerationOptions`, so glob matching is case-*sensitive* by default on Linux — and
+  the module always runs in a Linux container (see `Dockerfile`) regardless of what OS a
+  developer tests from. The indexing/hybrid-search pipeline itself (Phases 7–11) was never the
+  problem; the default entry point to it was.
+- Deliverable 1 — bug fix: make filename search case-insensitive, matching the case-insensitive
+  behavior users actually expect (and get for free on Windows dev machines, which is why this
+  wasn't caught earlier) regardless of which OS the container runs on. Pass
+  `EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, RecurseSubdirectories = true }`
+  instead of relying on the platform default.
+- Deliverable 2 — search-UX decision: content/hybrid search is "the entire point of indexing"
+  (this module's own stated purpose since Phase 7) but was opt-in behind a small, easy-to-miss
+  mode toggle, so most usage never reaches it. Decided: default `SearchPanel`'s mode state to
+  `"hybrid"` instead of `"filename"` — smallest change that makes content search what people hit
+  first, without removing the toggle or the filename-only mode (still useful for exact-path
+  lookups). Revisit a bigger redesign (e.g. merging both into one combined result set) later if
+  a hybrid default alone doesn't prove sufficient in practice.
+- Exit criteria:
+  - [x] `SearchEngine.Search` matches case-insensitively regardless of host OS; covered by
+    `Search_LowercasePattern_MatchesMixedCaseFilename` in `SearchEngineTests.cs`, and reproduced/
+    confirmed fixed against the real Linux container (`q=bread` went from `totalResults: 0` to
+    `totalResults: 1`)
+  - [x] `SearchPanel`'s default mode is `"hybrid"`, not `"filename"`
+  - [x] verified live: upload a document, hit Reindex, search a lowercase content term that only
+    appears capitalized/mixed-case in the filename or body — results found without switching
+    modes manually
+
+**Bug found via Deliverable 2, not part of the original motivation.** Defaulting to hybrid mode
+immediately crashed the results list (`TypeError: Cannot read properties of undefined (reading
+'toLowerCase')`). Root cause: the WebApi's `/search?mode=hybrid` returns entries shaped like the
+CLI's `index search` output — `documentPath`/`text` — but `web/src/types/index.ts`'s
+`HybridSearchEntry` had always declared `path`/`chunkText` instead, and `apiFetch<T>` trusts the
+declared type without runtime validation. This mismatch existed since Phase 13/14 but was never
+exercised, because hybrid mode was never the default and rarely toggled to manually — i.e. this
+phase's own motivation (content search being effectively unreachable) is exactly why the bug
+survived undetected until now. Fixed by adding `RawHybridSearchEntry`/`RawHybridSearchResponse`
+types matching the actual wire shape, and mapping them to the normalized `HybridSearchEntry`
+(`path`/`chunkText`) inside `searchHybrid` in `api/client.ts`, so components never see the raw
+field names. Verified in the browser end to end: searching "bread" in the (now-default) hybrid
+mode returns 10 correctly-ranked, non-crashing results with real chunk previews, and clicking one
+loads the full document preview correctly.
+
 ## Reference
 
 - Capability-module architecture decisions (sidecar-per-module, MCP over HTTP, entitlement via

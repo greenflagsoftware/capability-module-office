@@ -98,6 +98,23 @@ public class SearchEngineTests : IDisposable
     }
 
     [Fact]
+    public void Search_LowercasePattern_MatchesMixedCaseFilename()
+    {
+        // Regression test for a real bug: a file named "Bread Sale
+        // Agreement.docx" wasn't found searching lowercase "bread".
+        // Directory.EnumerateFiles' case sensitivity follows the platform
+        // default when no EnumerationOptions are passed — case-insensitive
+        // on Windows (masking this in local dev), case-SENSITIVE on Linux,
+        // where this module always runs in production (see Dockerfile).
+        File.WriteAllText(Path.Combine(_root, "Bread Sale Agreement.docx"), "contract content");
+
+        var entries = SearchEngine.Search(_root, _root, "bread");
+
+        Assert.Single(entries);
+        Assert.Equal("Bread Sale Agreement.docx", entries[0]["name"]);
+    }
+
+    [Fact]
     public void Search_ScopedToSubdirectory_OnlyFindsFilesUnderThatPath()
     {
         var subdirPath = Path.Combine(_root, "subdir");

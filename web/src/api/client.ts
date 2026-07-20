@@ -1,6 +1,7 @@
 import type {
   SearchResponse,
   HybridSearchResponse,
+  RawHybridSearchResponse,
   ViewResponse,
   UploadResponse,
   EditResponse,
@@ -42,7 +43,23 @@ export async function searchHybrid(
   const params = new URLSearchParams({ q });
   if (path) params.set("path", path);
   params.set("mode", "hybrid");
-  return apiFetch<HybridSearchResponse>(`/search?${params}`);
+  const raw = await apiFetch<RawHybridSearchResponse>(`/search?${params}`);
+
+  // The API returns documentPath/text (matching the CLI's `index search`
+  // output); normalize to the path/chunkText shape the UI uses everywhere
+  // else, consistent with filename search's SearchEntry.
+  return {
+    ...raw,
+    entries: raw.entries.map((e) => ({
+      path: e.documentPath,
+      chunkIndex: e.chunkIndex,
+      chunkText: e.text,
+      headingPath: e.headingPath,
+      score: e.score,
+      vectorScore: e.vectorScore,
+      keywordScore: e.keywordScore,
+    })),
+  };
 }
 
 export async function viewDocument(path: string): Promise<ViewResponse> {

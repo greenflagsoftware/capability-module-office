@@ -20,7 +20,7 @@ export default function SearchPanel({
   selectedPath,
 }: SearchPanelProps) {
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<SearchMode>("filename");
+  const [mode, setMode] = useState<SearchMode>("hybrid");
   const [results, setResults] = useState<
     (SearchEntry | HybridSearchEntry)[]
   >([]);

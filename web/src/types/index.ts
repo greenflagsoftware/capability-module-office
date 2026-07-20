@@ -4,13 +4,30 @@ export interface SearchEntry {
   type: string;
 }
 
+// Normalized shape used throughout the UI — see RawHybridSearchEntry below
+// for what the /search?mode=hybrid endpoint actually returns on the wire.
 export interface HybridSearchEntry {
   path: string;
+  chunkIndex: number;
   chunkText: string;
-  headingPath: string | null;
+  headingPath?: string[];
   score: number;
-  vectorScore: number | null;
-  keywordScore: number | null;
+  vectorScore: number;
+  keywordScore: number;
+}
+
+// The actual JSON shape returned by GET /search?mode=hybrid (mirrors the
+// CLI's `index search` output field names, which differ from the UI's
+// normalized HybridSearchEntry above — documentPath/text vs. path/chunkText).
+// Mapped to HybridSearchEntry in api/client.ts before reaching components.
+export interface RawHybridSearchEntry {
+  documentPath: string;
+  chunkIndex: number;
+  text: string;
+  headingPath?: string[];
+  score: number;
+  vectorScore: number;
+  keywordScore: number;
 }
 
 export interface SearchResponse {
@@ -27,6 +44,14 @@ export interface HybridSearchResponse {
   path: string;
   totalResults: number;
   entries: HybridSearchEntry[];
+}
+
+export interface RawHybridSearchResponse {
+  query: string;
+  mode: "hybrid";
+  path: string;
+  totalResults: number;
+  entries: RawHybridSearchEntry[];
 }
 
 export interface ViewResponse {
