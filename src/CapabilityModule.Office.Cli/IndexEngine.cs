@@ -159,6 +159,32 @@ internal static class IndexEngine
     }
 
     /// <summary>
+    /// Removes a document (and its chunks, via <c>ON DELETE CASCADE</c>) from
+    /// the index by its restricted-root-relative path. Called when a file is
+    /// removed from the filesystem (e.g. `delete`) so hybrid/semantic search
+    /// doesn't keep returning stale hits for content that no longer exists.
+    /// Returns true if an indexed document was found and removed, false if
+    /// the path was never indexed (not an error — nothing to clean up).
+    /// </summary>
+    public static async Task<bool> RemoveFromIndexAsync(string connectionString, string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "OFFICE_DB_CONNECTION environment variable is not set. " +
+                "Removing from the index requires a Postgres database.");
+        }
+
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await using var conn = await dataSource.OpenConnectionAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM documents WHERE relative_path = $1";
+        cmd.Parameters.Add(new NpgsqlParameter { Value = relativePath });
+        var rowsAffected = await cmd.ExecuteNonQueryAsync();
+        return rowsAffected > 0;
+    }
+
+    /// <summary>
     /// Finds chunks with NULL vector and embeds them. Returns the count of
     /// chunks that were embedded.
     /// </summary>

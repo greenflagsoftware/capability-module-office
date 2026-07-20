@@ -205,6 +205,47 @@ public sealed class IndexEngineTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------
+    // Removal from the index (index cleanup on delete)
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task RemoveFromIndexAsync_IndexedDocument_RemovesDocumentAndChunks()
+    {
+        File.WriteAllText(PathFor("removable.txt"), "This document will be removed from the index.");
+        await IndexEngine.BuildIndexAsync(_dir, _dir, _postgres.ConnectionString);
+        var (docCountBefore, chunkCountBefore) = await CountRowsAsync();
+        Assert.Equal(1, docCountBefore);
+        Assert.True(chunkCountBefore > 0);
+
+        var removed = await IndexEngine.RemoveFromIndexAsync(_postgres.ConnectionString, "removable.txt");
+
+        Assert.True(removed);
+        var (docCountAfter, chunkCountAfter) = await CountRowsAsync();
+        Assert.Equal(0, docCountAfter);
+        Assert.Equal(0, chunkCountAfter); // chunks cascade-deleted with the document
+    }
+
+    [Fact]
+    public async Task RemoveFromIndexAsync_PathNeverIndexed_ReturnsFalse_NoOtherRowsAffected()
+    {
+        File.WriteAllText(PathFor("keep-me.txt"), "This one stays indexed.");
+        await IndexEngine.BuildIndexAsync(_dir, _dir, _postgres.ConnectionString);
+
+        var removed = await IndexEngine.RemoveFromIndexAsync(_postgres.ConnectionString, "never-indexed.txt");
+
+        Assert.False(removed);
+        var (docCount, _) = await CountRowsAsync();
+        Assert.Equal(1, docCount); // the unrelated indexed document is untouched
+    }
+
+    [Fact]
+    public async Task RemoveFromIndexAsync_NoConnectionString_Throws()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => IndexEngine.RemoveFromIndexAsync("", "whatever.txt"));
+    }
+
+    // ---------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------
 

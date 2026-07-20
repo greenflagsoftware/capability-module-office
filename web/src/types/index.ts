@@ -57,6 +57,20 @@ export interface DeleteResponse {
   resolved: string;
   version: number;
   versionPath: string;
+  indexRemoved: boolean | null;
+}
+
+export interface IndexResponse {
+  path: string;
+  resolved: string;
+  filesProcessed: number;
+  filesIndexed: number;
+  filesUnchanged: number;
+  filesSkipped: number;
+  filesWithErrors: number;
+  totalChunksWritten: number;
+  totalChunksEmbedded: number;
+  existingChunksEmbedded: number;
 }
 
 export interface ApiError {

@@ -5,7 +5,7 @@ import UploadDialog from "./components/UploadDialog";
 import EditDialog from "./components/EditDialog";
 import ConfirmDialog from "./components/ConfirmDialog";
 import { ToastProvider, useToast } from "./components/Toast";
-import { viewDocument, deleteDocument } from "./api/client";
+import { viewDocument, deleteDocument, indexBuild } from "./api/client";
 import type { ViewResponse } from "./types";
 
 function AppInner() {
@@ -47,6 +47,27 @@ function AppInner() {
       showToast(`Uploaded "${path}"`, "success");
       setSelectedPath(path);
       loadDocument(path);
+
+      // Reindex so the new content is searchable via hybrid search. Runs in
+      // the background — the upload itself already succeeded, so a slow or
+      // failed index build shouldn't block the UI, just get surfaced.
+      indexBuild()
+        .then((summary) => {
+          if (summary.filesWithErrors > 0) {
+            showToast(
+              `Indexed with ${summary.filesWithErrors} error(s) — see server logs`,
+              "error",
+            );
+          }
+        })
+        .catch((err) => {
+          showToast(
+            err instanceof Error
+              ? `Search indexing failed: ${err.message}`
+              : "Search indexing failed",
+            "error",
+          );
+        });
     },
     [loadDocument, showToast],
   );
@@ -62,8 +83,13 @@ function AppInner() {
   const handleDelete = useCallback(async () => {
     if (!selectedPath) return;
     try {
-      await deleteDocument(selectedPath);
-      showToast(`Deleted "${selectedPath}"`, "success");
+      const res = await deleteDocument(selectedPath);
+      showToast(
+        res.indexRemoved
+          ? `Deleted "${selectedPath}" and removed it from the search index`
+          : `Deleted "${selectedPath}"`,
+        "success",
+      );
       setSelectedPath(null);
       setDocument(null);
       setShowDeleteConfirm(false);

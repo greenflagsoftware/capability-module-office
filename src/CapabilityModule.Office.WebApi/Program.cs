@@ -22,6 +22,14 @@ app.UseStaticFiles();
 // navigation (or a direct page reload) returns the app shell.
 app.MapFallbackToFile("index.html");
 
+// A JsonElement fallback for when the CLI's JSON is missing an expected
+// "entries" array — independent of any JsonDocument, so it's safe to Clone().
+JsonElement EmptyArray;
+using (var emptyDoc = JsonDocument.Parse("[]"))
+{
+    EmptyArray = emptyDoc.RootElement.Clone();
+}
+
 // Resolve the CLI root once — used by all endpoints for path security
 string ResolveRoot()
 {
@@ -68,7 +76,7 @@ app.MapGet("/search", async (string q, string? path, string? mode) =>
 
             var json = await CliRunner.RunAsync(args);
             using var doc = JsonDocument.Parse(json);
-            var entries = doc.RootElement.TryGetProperty("entries", out var e) ? e : default;
+            var entries = doc.RootElement.TryGetProperty("entries", out var e) ? e.Clone() : EmptyArray;
             return Results.Ok(new
             {
                 query = q,
@@ -91,7 +99,7 @@ app.MapGet("/search", async (string q, string? path, string? mode) =>
             var json = await CliRunner.RunAsync(args, CliRunner.DefaultTimeout);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            var entries = root.TryGetProperty("entries", out var e) ? e : default;
+            var entries = root.TryGetProperty("entries", out var e) ? e.Clone() : EmptyArray;
             var totalResults = root.TryGetProperty("totalResults", out var tr) ? tr.GetInt32() : 0;
 
             return Results.Ok(new
@@ -107,6 +115,53 @@ app.MapGet("/search", async (string q, string? path, string? mode) =>
         {
             return Results.BadRequest(new { error = $"Invalid mode '{mode}'. Use 'filename' or 'hybrid'." });
         }
+    }
+    catch (CliToolException ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 502);
+    }
+    catch (CliTimeoutException ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 504);
+    }
+    catch (Exception ex) when (ex is not ArgumentException)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
+
+// ---------------------------------------------------------------------------
+// POST /index?path=... — (re)build the search index (wraps `index build`).
+// Longer timeout than other endpoints since it walks the directory, extracts
+// content, chunks it, and generates embeddings — not a quick lookup.
+// ---------------------------------------------------------------------------
+var indexTimeout = TimeSpan.FromMinutes(5);
+
+app.MapPost("/index", async (string? path) =>
+{
+    var root = ResolveRoot();
+    var effectivePath = string.IsNullOrWhiteSpace(path) ? "." : path;
+
+    try
+    {
+        var args = new List<string> { "index", "build", effectivePath, "--root", root };
+        var json = await CliRunner.RunAsync(args, indexTimeout);
+        using var doc = JsonDocument.Parse(json);
+        var root2 = doc.RootElement;
+
+        return Results.Ok(new
+        {
+            path = effectivePath,
+            resolved = root2.TryGetProperty("resolved", out var r) ? r.GetString() : effectivePath,
+            filesProcessed = root2.TryGetProperty("filesProcessed", out var fp) ? fp.GetInt32() : 0,
+            filesIndexed = root2.TryGetProperty("filesIndexed", out var fi) ? fi.GetInt32() : 0,
+            filesUnchanged = root2.TryGetProperty("filesUnchanged", out var fu) ? fu.GetInt32() : 0,
+            filesSkipped = root2.TryGetProperty("filesSkipped", out var fs) ? fs.GetInt32() : 0,
+            filesWithErrors = root2.TryGetProperty("filesWithErrors", out var fe) ? fe.GetInt32() : 0,
+            totalChunksWritten = root2.TryGetProperty("totalChunksWritten", out var tcw) ? tcw.GetInt32() : 0,
+            totalChunksEmbedded = root2.TryGetProperty("totalChunksEmbedded", out var tce) ? tce.GetInt32() : 0,
+            existingChunksEmbedded = root2.TryGetProperty("existingChunksEmbedded", out var ece) ? ece.GetInt32() : 0,
+        });
     }
     catch (CliToolException ex)
     {
@@ -327,6 +382,9 @@ app.MapDelete("/delete", async (string path) =>
             resolved = rootEl.TryGetProperty("resolved", out var r) ? r.GetString() : path,
             version = rootEl.TryGetProperty("version", out var v) ? v.GetInt32() : 0,
             versionPath = rootEl.TryGetProperty("versionPath", out var vp) ? vp.GetString() : "",
+            indexRemoved = rootEl.TryGetProperty("indexRemoved", out var ir) && ir.ValueKind != JsonValueKind.Null
+                ? ir.GetBoolean()
+                : (bool?)null,
         });
     }
     catch (CliToolException ex)

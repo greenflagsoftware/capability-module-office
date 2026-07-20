@@ -5,6 +5,7 @@ import type {
   UploadResponse,
   EditResponse,
   DeleteResponse,
+  IndexResponse,
 } from "../types";
 
 const BASE_URL = "";
@@ -89,5 +90,14 @@ export async function deleteDocument(path: string): Promise<DeleteResponse> {
   const params = new URLSearchParams({ path });
   return apiFetch<DeleteResponse>(`/delete?${params}`, {
     method: "DELETE",
+  });
+}
+
+export async function indexBuild(path?: string): Promise<IndexResponse> {
+  const params = new URLSearchParams();
+  if (path) params.set("path", path);
+  const qs = params.toString();
+  return apiFetch<IndexResponse>(`/index${qs ? `?${qs}` : ""}`, {
+    method: "POST",
   });
 }

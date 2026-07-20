@@ -144,6 +144,12 @@ public static class FileTools
         var version = root.TryGetProperty("version", out var v) ? v.GetInt32() : 0;
         var versionPath = root.TryGetProperty("versionPath", out var vp) ? vp.GetString() : "";
 
-        return $"Deleted {resolved}. Content preserved as version {version} at {versionPath}.";
+        var msg = $"Deleted {resolved}. Content preserved as version {version} at {versionPath}.";
+        if (root.TryGetProperty("indexRemoved", out var ir) && ir.ValueKind != JsonValueKind.Null && ir.GetBoolean())
+        {
+            msg += " Also removed from the search index.";
+        }
+
+        return msg;
     }
 }

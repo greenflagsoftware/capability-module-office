@@ -619,6 +619,35 @@ to gate on this.
   - [x] integration/adapter tests under a new `tests/CapabilityModule.Office.WebApi.Tests/`
     project, following the existing MCP-adapter test pattern
 
+**Note on search never working end-to-end (found and fixed post-Phase-14).** Phases 7–11 built
+the indexing/search pipeline and Phase 13/14 built the web UI around it, but nothing ever
+connected them for the web UI specifically — hybrid search was broken from the browser in every
+case, for three compounding reasons:
+
+- `docker-compose.yml`'s `webapi` service never set `OFFICE_DB_CONNECTION` (only `module` did),
+  so `index search` failed immediately with "environment variable is not set".
+- `module` and `webapi` are separate containers with no shared volume — each had its own local
+  `/data`, so a file uploaded through the web UI wasn't visible to whatever process might index
+  it, even if one existed.
+- No process ever called `index build` for the web UI at all. Phase 11 deferred auto-reindex,
+  and Phase 13's endpoint list never added a REST endpoint for it — upload had no ingestion path
+  into the index, by omission rather than a decision.
+- Separately, `/search`'s `entries` value was a `JsonElement` view into a `using`-disposed
+  `JsonDocument`, thrown away before ASP.NET Core serialized the response — every filename and
+  hybrid search request threw `ObjectDisposedException` and returned an empty 500, masking the
+  three issues above during manual testing.
+
+Fixed: `docker-compose.yml` now gives `webapi` the same `OFFICE_DB_CONNECTION` as `module` and
+both mount a shared `office_data` named volume at `/data`; a new `POST /index` endpoint on the
+WebApi wraps `index build`, and the frontend calls it automatically after a successful upload
+(fire-and-forget, surfaced via toast on failure) so newly uploaded documents become searchable
+without a manual CLI step; and `/search`'s JsonElement values are `.Clone()`d out of the
+`JsonDocument` before it's disposed. Verified end-to-end via `docker compose up --build`: upload
+→ auto-index → filename search finds the file. Hybrid search still requires a real
+`OPENAI_API_KEY` in `.env` (per Phase 10) to embed the query text — untested here since no key
+was available, but it now fails for that reason specifically rather than the DB/volume/ingestion
+gaps above.
+
 ### Phase 14 — Web UI frontend
 
 - Deliverable: a React/TypeScript single-page app (proposed location: `web/`, sibling to `src/`

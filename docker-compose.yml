@@ -26,6 +26,8 @@ services:
         required: false
     environment:
       OFFICE_DB_CONNECTION: "Host=db;Port=5432;Database=office_module;Username=office_module;Password=${OFFICE_DB_PASSWORD:-office_module_dev}"
+    volumes:
+      - office_data:/data
     depends_on:
       db:
         condition: service_healthy
@@ -41,6 +43,13 @@ services:
         required: false
     environment:
       OFFICE_CLI_ROOT: /data
+      OFFICE_DB_CONNECTION: "Host=db;Port=5432;Database=office_module;Username=office_module;Password=${OFFICE_DB_PASSWORD:-office_module_dev}"
+    volumes:
+      - office_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:
+  office_data:
