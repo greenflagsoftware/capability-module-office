@@ -31,6 +31,14 @@
     {
       "name": "index_search",
       "description": "Search indexed document content using hybrid (vector + keyword) search. Returns relevant chunks from indexed documents, ranked by relevance. Requires the index to have been built first via index_build."
+    },
+    {
+      "name": "upload_file",
+      "description": "Upload a binary file (base64-encoded) to the restricted root. Decodes the base64 content and writes the bytes. Supports --mode create (default, fails if exists) or --mode overwrite (replaces existing, versioned). Max upload size: 50 MB."
+    },
+    {
+      "name": "delete_file",
+      "description": "Delete a file within the restricted root. The file is snapshotted to the version store before removal, so the content is recoverable from the version store."
     }
   ]
 }

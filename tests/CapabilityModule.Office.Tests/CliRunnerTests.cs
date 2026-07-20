@@ -217,3 +217,68 @@ public class DocxToolsValidationTests
         Assert.IsNotType<ArgumentException>(ex);
     }
 }
+
+public class FileToolsValidationTests
+{
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task UploadFile_NullOrEmptyPath_ThrowsArgumentException(string? invalidPath)
+    {
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            Tools.FileTools.UploadFile(invalidPath!, "dGVzdA=="));
+
+        Assert.Contains("path", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task UploadFile_NullOrEmptyContent_ThrowsArgumentException(string? invalidContent)
+    {
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            Tools.FileTools.UploadFile("test.bin", invalidContent!));
+
+        Assert.Contains("content", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task UploadFile_ValidArgs_ReachesCliLayer_NotValidationError()
+    {
+        // Should not throw ArgumentException — validation passes.
+        // The CLI call may succeed or fail with some other error (file system, etc.)
+        // Either way, it's not a validation error.
+        var ex = await Record.ExceptionAsync(() =>
+            Tools.FileTools.UploadFile("test.bin", "dGVzdA=="));
+
+        // If it failed, it must not be an ArgumentException (validation error)
+        if (ex != null)
+        {
+            Assert.IsNotType<ArgumentException>(ex);
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task DeleteFile_NullOrEmptyPath_ThrowsArgumentException(string? invalidPath)
+    {
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            Tools.FileTools.DeleteFile(invalidPath!));
+
+        Assert.Contains("path", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DeleteFile_ValidArgs_ReachesCliLayer_NotValidationError()
+    {
+        var ex = await Record.ExceptionAsync(() =>
+            Tools.FileTools.DeleteFile("test.txt"));
+
+        Assert.NotNull(ex);
+        Assert.IsNotType<ArgumentException>(ex);
+    }
+}

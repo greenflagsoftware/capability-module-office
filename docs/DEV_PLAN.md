@@ -559,24 +559,24 @@ to gate on this.
   - Deleting a path that doesn't exist, or one outside the restricted root, is a non-zero-exit
     error, not a silent no-op.
 - Exit criteria:
-  - [ ] `upload <path>` command added, accepting base64 content via `--content-base64` or stdin
-  - [ ] `upload` decodes and writes bytes correctly for a real binary fixture (round-tripped
+  - [x] `upload <path>` command added, accepting base64 content via `--content-base64` or stdin
+  - [x] `upload` decodes and writes bytes correctly for a real binary fixture (round-tripped
     against a `.docx` and a `.pdf`, not just plain text)
-  - [ ] `upload --mode overwrite` on an existing file snapshots the pre-upload content to the
+  - [x] `upload --mode overwrite` on an existing file snapshots the pre-upload content to the
     version store before overwriting
-  - [ ] oversized upload content is rejected with a clear non-zero-exit error rather than
+  - [x] oversized upload content is rejected with a clear non-zero-exit error rather than
     silently truncated or OOM-ing the process
-  - [ ] `delete <path>` command added; deleting snapshots to the version store, then removes the
+  - [x] `delete <path>` command added; deleting snapshots to the version store, then removes the
     file from its original location
-  - [ ] `delete` on a nonexistent path, or a path outside the restricted root, exits non-zero
+  - [x] `delete` on a nonexistent path, or a path outside the restricted root, exits non-zero
     with a clear error
-  - [ ] both commands emit machine-readable (JSON) output on stdout, consistent with the CLI's
+  - [x] both commands emit machine-readable (JSON) output on stdout, consistent with the CLI's
     existing contract (path/resolved location; `upload` includes bytes written and, when
     versioned, the version number/path; `delete` includes the version path the content was
     snapshotted to)
-  - [ ] MCP tools wired per Phase 3's pattern (new tool class, e.g. `FileTools.cs`),
+  - [x] MCP tools wired per Phase 3's pattern (new tool class, e.g. `FileTools.cs`),
     `module.manifest.json` updated with `upload_file` / `delete_file`
-  - [ ] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` (binary round-trip, oversized
+  - [x] unit tests under `tests/CapabilityModule.Office.Cli.Tests/` (binary round-trip, oversized
     rejection, versioned-overwrite, versioned-delete, path-traversal rejection); MCP-adapter
     tests under `tests/CapabilityModule.Office.Tests/`
 

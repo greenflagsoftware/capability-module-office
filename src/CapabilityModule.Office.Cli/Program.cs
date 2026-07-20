@@ -15,6 +15,8 @@ public static class Program
             new DocxCommand().Command(),
             new SearchCommand().Command(),
             new IndexCommand().Command(),
+            new UploadCommand().Command(),
+            new DeleteCommand().Command(),
         };
 
         rootCommand.SetHandler(() =>
