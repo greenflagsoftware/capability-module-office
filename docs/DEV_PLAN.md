@@ -606,17 +606,17 @@ to gate on this.
     primitive Phase 6 offers, not free-form rich-text editing.
   - Delete — wraps `delete` (Phase 12).
 - Exit criteria:
-  - [ ] `src/CapabilityModule.Office.WebApi` builds standalone with `dotnet build`
-  - [ ] `/health` endpoint, consistent with the existing module's health-check convention
-  - [ ] search endpoint returns results from both filename search and semantic/hybrid search
-  - [ ] view endpoint returns extracted text for a stored document
-  - [ ] upload endpoint accepts a multipart file and stores it via the Phase 12 `upload` command
-  - [ ] edit endpoint performs a find/replace via `docx replace` (blocked until Phase 6 lands)
-  - [ ] delete endpoint removes a stored file via the Phase 12 `delete` command
-  - [ ] all endpoints reject paths outside the restricted root with a clear error status, not a
+  - [x] `src/CapabilityModule.Office.WebApi` builds standalone with `dotnet build`
+  - [x] `/health` endpoint, consistent with the existing module's health-check convention
+  - [x] search endpoint returns results from both filename search and semantic/hybrid search
+  - [x] view endpoint returns extracted text for a stored document
+  - [x] upload endpoint accepts a multipart file and stores it via the Phase 12 `upload` command
+  - [x] edit endpoint performs a find/replace via `docx replace` (Phase 6 is complete, so this is unblocked)
+  - [x] delete endpoint removes a stored file via the Phase 12 `delete` command
+  - [x] all endpoints reject paths outside the restricted root with a clear error status, not a
     500 or a silent no-op
-  - [ ] added as a new service in `docker-compose.yml`
-  - [ ] integration/adapter tests under a new `tests/CapabilityModule.Office.WebApi.Tests/`
+  - [x] added as a new service in `docker-compose.yml`
+  - [x] integration/adapter tests under a new `tests/CapabilityModule.Office.WebApi.Tests/`
     project, following the existing MCP-adapter test pattern
 
 ### Phase 14 — Web UI frontend

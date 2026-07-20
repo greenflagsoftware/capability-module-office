@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>CapabilityModule.Office.WebApi</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CapabilityModule.Office.WebApi.Tests" />
+  </ItemGroup>
+
+  <!-- Reference the CLI project to trigger its build -->
+  <ItemGroup>
+    <ProjectReference Include="..\CapabilityModule.Office.Cli\CapabilityModule.Office.Cli.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- After build, copy the entire CLI output to the WebApi's output directory -->
+  <Target Name="CopyCliOutput" AfterTargets="Build">
+    <MSBuild Projects="..\CapabilityModule.Office.Cli\CapabilityModule.Office.Cli.csproj" Targets="Build" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="CliBuildOutput" />
+    </MSBuild>
+    <ItemGroup>
+      <CliFiles Include="$(ProjectDir)..\CapabilityModule.Office.Cli\bin\$(Configuration)\net10.0\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CliFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- Also copy for publish -->
+  <Target Name="CopyCliOutputForPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <CliFiles Include="$(ProjectDir)..\CapabilityModule.Office.Cli\bin\$(Configuration)\net10.0\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CliFiles)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

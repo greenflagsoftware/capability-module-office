@@ -16,7 +16,9 @@ services:
       retries: 5
 
   module:
-    build: .
+    build:
+      context: .
+      target: module
     ports:
       - "8082:8080"
     env_file:
@@ -27,6 +29,18 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  webapi:
+    build:
+      context: .
+      target: webapi
+    ports:
+      - "8083:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      OFFICE_CLI_ROOT: /data
 
 volumes:
   pgdata:

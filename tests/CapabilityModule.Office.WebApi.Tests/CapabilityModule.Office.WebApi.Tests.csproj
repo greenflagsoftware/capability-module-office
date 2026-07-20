@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>CapabilityModule.Office.WebApi.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CapabilityModule.Office.WebApi\CapabilityModule.Office.WebApi.csproj" />
+  </ItemGroup>
+
+  <!-- Reference the CLI project to trigger its build and copy its output -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CapabilityModule.Office.Cli\CapabilityModule.Office.Cli.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- Copy CLI output to the test project's output directory -->
+  <Target Name="CopyCliOutput" AfterTargets="Build">
+    <MSBuild Projects="..\..\src\CapabilityModule.Office.Cli\CapabilityModule.Office.Cli.csproj" Targets="Build" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="CliBuildOutput" />
+    </MSBuild>
+    <ItemGroup>
+      <CliFiles Include="$(ProjectDir)..\..\src\CapabilityModule.Office.Cli\bin\$(Configuration)\net10.0\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CliFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

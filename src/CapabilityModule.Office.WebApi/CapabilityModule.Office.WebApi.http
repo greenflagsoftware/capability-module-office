@@ -1,0 +1,6 @@
+@CapabilityModule.Office.WebApi_HostAddress = http://localhost:5015
+
+GET {{CapabilityModule.Office.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
