@@ -17,6 +17,7 @@ public static class Program
             new IndexCommand().Command(),
             new UploadCommand().Command(),
             new DeleteCommand().Command(),
+            new DownloadCommand().Command(),
         };
 
         rootCommand.SetHandler(() =>

@@ -131,6 +131,30 @@ public static class FileTools
         return msg;
     }
 
+    [McpServerTool, Description("Download a file's raw bytes (base64-encoded) from the restricted root. Use this to retrieve a file's exact original content, as opposed to docx_read's extracted plain text.")]
+    public static async Task<string> DownloadFile(
+        [Description("Path to the file to download, relative to the restricted root.")] string path)
+    {
+        ValidatePath(path, nameof(path));
+
+        using var doc = await CallCliAsync(BuildArgs("download", path), CliRunner.DefaultTimeout);
+
+        var root = doc.RootElement;
+        var resolved = root.TryGetProperty("resolved", out var r) ? r.GetString() : path;
+        var filename = root.TryGetProperty("filename", out var fn) ? fn.GetString() : Path.GetFileName(path);
+        var sizeBytes = root.TryGetProperty("sizeBytes", out var sb) ? sb.GetInt64() : 0;
+        var contentBase64 = root.TryGetProperty("contentBase64", out var cb) ? cb.GetString() : "";
+
+        return JsonSerializer.Serialize(new
+        {
+            path,
+            resolved,
+            filename,
+            sizeBytes,
+            contentBase64,
+        });
+    }
+
     [McpServerTool, Description("Delete a file within the restricted root. The file is snapshotted to the version store before removal, so the content is recoverable from the version store.")]
     public static async Task<string> DeleteFile(
         [Description("Path to the file to delete, relative to the restricted root.")] string path)

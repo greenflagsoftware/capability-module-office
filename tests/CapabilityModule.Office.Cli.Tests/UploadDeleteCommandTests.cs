@@ -4,6 +4,15 @@ using CapabilityModule.Office.Cli.Commands;
 
 namespace CapabilityModule.Office.Cli.Tests;
 
+// DownloadCommandTests captures process-wide Console.Out to read the CLI's JSON
+// stdout. Since UploadCommandTests and DeleteCommandTests also invoke commands
+// that write to Console.Out (via RootCommand.InvokeAsync), all three must run
+// sequentially rather than in xUnit's default parallel-across-classes mode, or
+// their concurrent writes corrupt the captured stream.
+[CollectionDefinition("CliConsoleInvocation", DisableParallelization = true)]
+public class CliConsoleInvocationCollection { }
+
+[Collection("CliConsoleInvocation")]
 public class UploadCommandTests : IDisposable
 {
     private readonly string _root;
@@ -130,6 +139,7 @@ public class UploadCommandTests : IDisposable
     }
 }
 
+[Collection("CliConsoleInvocation")]
 public class DeleteCommandTests : IDisposable
 {
     private readonly string _root;
@@ -187,4 +197,77 @@ public class DeleteCommandTests : IDisposable
         Assert.True(File.Exists(versionPath), "Version file should exist in mirrored path");
         Assert.Equal("nested content", File.ReadAllText(versionPath));
     }
+}
+
+[Collection("CliConsoleInvocation")]
+public class DownloadCommandTests : IDisposable
+{
+    private readonly string _root;
+    private readonly RootCommand _rootCmd;
+    private readonly StringWriter _stdout;
+
+    public DownloadCommandTests()
+    {
+        _root = Path.Combine(Path.GetTempPath(), "office-cli-download-tests-" + Guid.NewGuid());
+        Directory.CreateDirectory(_root);
+
+        _rootCmd = new RootCommand { new DownloadCommand().Command() };
+
+        _stdout = new StringWriter();
+        Console.SetOut(_stdout);
+    }
+
+    public void Dispose()
+    {
+        Console.SetOut(new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true });
+        if (Directory.Exists(_root))
+        {
+            Directory.Delete(_root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Download_ExistingFile_ReturnsBase64Content()
+    {
+        var binary = new byte[256];
+        new Random(7).NextBytes(binary);
+        File.WriteAllBytes(Path.Combine(_root, "payload.bin"), binary);
+
+        var args = new[] { "download", "payload.bin", "--root", _root };
+        var exitCode = await _rootCmd.InvokeAsync(args);
+
+        Assert.Equal(0, exitCode);
+        using var doc = JsonDocument.Parse(_stdout.ToString());
+        var root = doc.RootElement;
+
+        Assert.Equal("payload.bin", root.GetProperty("filename").GetString());
+        Assert.Equal(binary.LongLength, root.GetProperty("sizeBytes").GetInt64());
+
+        var decoded = Convert.FromBase64String(root.GetProperty("contentBase64").GetString()!);
+        Assert.True(binary.SequenceEqual(decoded), "Downloaded content should round-trip exactly");
+    }
+
+    [Fact]
+    public async Task Download_FileInSubdirectory_ReturnsCorrectFilename()
+    {
+        var subdir = Path.Combine(_root, "subdir");
+        Directory.CreateDirectory(subdir);
+        File.WriteAllText(Path.Combine(subdir, "nested.txt"), "nested content");
+
+        var args = new[] { "download", "subdir/nested.txt", "--root", _root };
+        var exitCode = await _rootCmd.InvokeAsync(args);
+
+        Assert.Equal(0, exitCode);
+        using var doc = JsonDocument.Parse(_stdout.ToString());
+        var root = doc.RootElement;
+
+        Assert.Equal("nested.txt", root.GetProperty("filename").GetString());
+        var decoded = Convert.FromBase64String(root.GetProperty("contentBase64").GetString()!);
+        Assert.Equal("nested content", System.Text.Encoding.UTF8.GetString(decoded));
+    }
+
+    // Note: missing-file and path-escape cases call Environment.Exit(), which
+    // terminates the test host process rather than returning — consistent with
+    // ReadCommand/UploadCommand/DeleteCommand, none of which test those paths
+    // in-process either.
 }

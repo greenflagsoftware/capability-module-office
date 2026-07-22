@@ -39,6 +39,10 @@
     {
       "name": "delete_file",
       "description": "Delete a file within the restricted root. The file is snapshotted to the version store before removal, so the content is recoverable from the version store."
+    },
+    {
+      "name": "download_file",
+      "description": "Download a file's raw bytes (base64-encoded) from the restricted root. Returns the exact original content, as opposed to docx_read's extracted plain text."
     }
   ]
 }

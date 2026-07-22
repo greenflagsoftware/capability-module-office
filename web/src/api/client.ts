@@ -67,6 +67,11 @@ export async function viewDocument(path: string): Promise<ViewResponse> {
   return apiFetch<ViewResponse>(`/view?${params}`);
 }
 
+export function downloadUrl(path: string): string {
+  const params = new URLSearchParams({ path });
+  return `${BASE_URL}/download?${params}`;
+}
+
 export async function uploadFile(
   file: File,
   destPath: string,

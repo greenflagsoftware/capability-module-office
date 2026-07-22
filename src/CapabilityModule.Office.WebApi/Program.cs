@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CapabilityModule.Office.WebApi.Cli;
+using Microsoft.AspNetCore.StaticFiles;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +30,8 @@ using (var emptyDoc = JsonDocument.Parse("[]"))
 {
     EmptyArray = emptyDoc.RootElement.Clone();
 }
+
+var contentTypeProvider = new FileExtensionContentTypeProvider();
 
 // Resolve the CLI root once — used by all endpoints for path security
 string ResolveRoot()
@@ -224,6 +227,56 @@ app.MapGet("/view", async (string path) =>
                 format = "text"
             });
         }
+    }
+    catch (CliToolException ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 502);
+    }
+    catch (CliTimeoutException ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 504);
+    }
+    catch (Exception ex) when (ex is not ArgumentException)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
+
+// ---------------------------------------------------------------------------
+// GET /download?path=... — raw file bytes with Content-Disposition: attachment
+// ---------------------------------------------------------------------------
+app.MapGet("/download", async (string path) =>
+{
+    if (string.IsNullOrWhiteSpace(path))
+    {
+        return Results.BadRequest(new { error = "Query parameter 'path' is required." });
+    }
+
+    var root = ResolveRoot();
+
+    try
+    {
+        var args = new List<string> { "download", path, "--root", root };
+        var json = await CliRunner.RunAsync(args);
+        using var doc = JsonDocument.Parse(json);
+        var rootEl = doc.RootElement;
+
+        var contentBase64 = rootEl.TryGetProperty("contentBase64", out var cb) ? cb.GetString() : null;
+        if (string.IsNullOrEmpty(contentBase64))
+        {
+            return Results.Problem(detail: "Download produced no content.", statusCode: 500);
+        }
+
+        var filename = (rootEl.TryGetProperty("filename", out var fn) ? fn.GetString() : null)
+            ?? Path.GetFileName(path);
+        var bytes = Convert.FromBase64String(contentBase64);
+
+        if (!contentTypeProvider.TryGetContentType(filename, out var contentType))
+        {
+            contentType = "application/octet-stream";
+        }
+
+        return Results.File(bytes, contentType, fileDownloadName: filename);
     }
     catch (CliToolException ex)
     {

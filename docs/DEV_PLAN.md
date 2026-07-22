@@ -748,6 +748,32 @@ field names. Verified in the browser end to end: searching "bread" in the (now-d
 mode returns 10 correctly-ranked, non-crashing results with real chunk previews, and clicking one
 loads the full document preview correctly.
 
+### Phase 16 — Download a file from preview
+
+- Motivation: [issue #5](https://github.com/greenflagsoftware/capability-module-office/issues/5)
+  — the web UI's preview pane can view a document but offers no way to retrieve the original
+  file (raw bytes), only the extracted text. Users previewing a file want to save the actual
+  document to their machine.
+- Deliverable: new CLI command `download` (`src/CapabilityModule.Office.Cli/Commands/
+  DownloadCommand.cs`) — reads a file's raw bytes and returns them base64-encoded, mirroring
+  `upload`'s encoding convention in reverse. A new WebApi endpoint `GET /download?path=...`
+  (`src/CapabilityModule.Office.WebApi/Program.cs`) decodes the base64 and returns the file with
+  a `Content-Disposition: attachment` header and a content type resolved via
+  `FileExtensionContentTypeProvider` (falling back to `application/octet-stream`). A matching MCP
+  tool `download_file` was added to `FileTools.cs` for parity with the other CLI-backed tools, and
+  `module.manifest.json` updated to declare it. The web UI's `PreviewPane` gained a Download
+  button (a plain `<a download href="/download?path=...">`, no React state needed — the browser
+  handles the file save natively).
+- Exit criteria:
+  - [x] `download` CLI command round-trips arbitrary binary content exactly (see
+    `DownloadCommandTests` in `UploadDeleteCommandTests.cs`)
+  - [x] `GET /download` verified end-to-end via `docker compose up --build`: uploaded a `.txt`
+    file and downloaded it back byte-for-byte with the correct `Content-Disposition` header, and
+    downloaded an existing `.docx` file with the correct Word content type and matching size
+  - [x] Download button renders in the preview pane and produces a working `/download` link,
+    verified in the browser
+  - [x] `download_file` MCP tool added and declared in `module.manifest.json`
+
 ## Reference
 
 - Capability-module architecture decisions (sidecar-per-module, MCP over HTTP, entitlement via
