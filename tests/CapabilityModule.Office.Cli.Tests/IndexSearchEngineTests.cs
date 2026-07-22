@@ -14,6 +14,8 @@ public class IndexSearchEngineTests
         Assert.Equal(1.0, IndexSearchEngine.VectorWeight + IndexSearchEngine.KeywordWeight, 6);
         Assert.True(IndexSearchEngine.MaxLimit > 0);
         Assert.Equal(100, IndexSearchEngine.MaxLimit);
+        Assert.InRange(IndexSearchEngine.MinVectorScore, 0, 1);
+        Assert.InRange(IndexSearchEngine.MinKeywordScore, 0, 1);
     }
 
     // ---------------------------------------------------------------

@@ -508,6 +508,16 @@ changes were needed since both `module` and `webapi` already load `.env` via `en
 - Combination strategy: weighted sum with equal weights (0.5 each), NULL-safe so chunks
   contributing only one signal still score via the other. Weighting is tunable constant in
   `IndexSearchEngine` — refine once real query traffic exists.
+- **Relevance floor (added post-Phase-11, [issue #4](https://github.com/greenflagsoftware/capability-module-office/issues/4)).**
+  The original filter excluded chunks only when *both* signals were exactly 0 — but cosine
+  similarity is almost never exactly 0, so unrelated documents (e.g. a "bread sale agreement"
+  matching a search for "James") were still returned. Replaced with two per-signal minimums,
+  `MinVectorScore` (0.35) and `MinKeywordScore` (0.02) — a chunk needs to clear one of them to
+  appear at all. Two separate constants rather than one combined-score cutoff because `ts_rank`
+  and cosine similarity live on different scales: a real exact-phrase keyword match on a short
+  chunk scored ~0.099 on `ts_rank` against a live pgvector container, which a single combined
+  threshold would have filtered out along with the noise. Tune both based on real query traffic,
+  same as the weights above.
 - Each result includes the source document's restricted-root path (per the reference-
   composability contract established in Phase 1/5) so a hit can be piped into `docx read`/`read`
   for full context, plus the chunk's structural metadata (heading path) so results are
