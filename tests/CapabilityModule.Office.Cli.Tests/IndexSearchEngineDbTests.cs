@@ -74,6 +74,37 @@ public sealed class IndexSearchEngineDbTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SearchAsync_WeakVectorScoreAndNoKeywordMatch_IsExcluded()
+    {
+        // Regression test for issue #4: an unrelated document with a mediocre
+        // vector score and zero keyword overlap (e.g. "bread sale agreement"
+        // surfacing when searching for "James") must not appear at all.
+        var docId = await SeedDocumentAsync("unrelated.txt");
+        await SeedChunkAsync(docId, 0, "an unrelated sale agreement", TiltedVector(0, 1, 0.3));
+
+        var provider = new FixedVectorEmbeddingProvider(BasisVector(0));
+
+        var results = await IndexSearchEngine.SearchAsync(
+            "zzz nonexistent keyword", _postgres.ConnectionString, provider);
+
+        Assert.Empty(results.Results);
+    }
+
+    [Fact]
+    public async Task SearchAsync_VectorScoreAboveThreshold_IsIncluded()
+    {
+        var docId = await SeedDocumentAsync("relevant.txt");
+        await SeedChunkAsync(docId, 0, "closely related content", TiltedVector(0, 1, 0.5));
+
+        var provider = new FixedVectorEmbeddingProvider(BasisVector(0));
+
+        var results = await IndexSearchEngine.SearchAsync(
+            "zzz nonexistent keyword", _postgres.ConnectionString, provider);
+
+        Assert.Single(results.Results);
+    }
+
+    [Fact]
     public async Task SearchAsync_SubdirectoryFilter_AnchorsOnPathBoundary()
     {
         // Regression test for the LIKE-prefix boundary fix: scoping to "reports"
@@ -145,6 +176,17 @@ public sealed class IndexSearchEngineDbTests : IAsyncLifetime
     {
         var v = new float[Dim];
         foreach (var i in indices) v[i] = 1.0f;
+        return v;
+    }
+
+    // Unit vector with an exact cosine similarity of `cosine` against
+    // BasisVector(primaryIndex): component `cosine` on the primary axis, with
+    // the remainder of the unit norm placed on a secondary axis.
+    private static float[] TiltedVector(int primaryIndex, int secondaryIndex, double cosine)
+    {
+        var v = new float[Dim];
+        v[primaryIndex] = (float)cosine;
+        v[secondaryIndex] = (float)Math.Sqrt(1 - cosine * cosine);
         return v;
     }
 

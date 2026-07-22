@@ -33,6 +33,23 @@ internal static class IndexSearchEngine
     internal const int MaxLimit = 100;
 
     /// <summary>
+    /// Minimum cosine-similarity vector score for a chunk to be considered a match
+    /// on the vector signal alone. Cosine similarity is a continuous value that is
+    /// almost never exactly 0, so filtering on "> 0" (the previous behavior) let
+    /// essentially every indexed chunk through regardless of relevance. Tune based
+    /// on real query traffic (see docs/DEV_PLAN.md Phase 11 note).
+    /// </summary>
+    internal const double MinVectorScore = 0.35;
+
+    /// <summary>
+    /// Minimum ts_rank keyword score for a chunk to be considered a match on the
+    /// keyword signal alone. Kept low relative to <see cref="MinVectorScore"/>
+    /// because ts_rank and cosine similarity live on different scales — a single
+    /// exact-phrase keyword match on a short chunk commonly scores well under 0.1.
+    /// </summary>
+    internal const double MinKeywordScore = 0.02;
+
+    /// <summary>
     /// A single search result hit.
     /// </summary>
     /// <param name="DocumentPath">Restricted-root-relative path to the source document.</param>
@@ -152,10 +169,13 @@ internal static class IndexSearchEngine
             FROM chunks c
             JOIN documents d ON d.id = c.document_id
             WHERE ($3 IS NULL OR d.relative_path LIKE $3 || '%')
-              -- Exclude chunks with zero in both signals (unindexed content)
+              -- Require a meaningfully relevant match on at least one signal.
+              -- Thresholds differ per signal because ts_rank and cosine
+              -- similarity live on different scales (see MinVectorScore /
+              -- MinKeywordScore doc comments).
               AND (
-                  COALESCE(1 - (c.vector <=> $1::vector), 0) > 0
-                  OR COALESCE(ts_rank(c.search_vector, plainto_tsquery('english', $2)), 0) > 0
+                  COALESCE(1 - (c.vector <=> $1::vector), 0) >= $7
+                  OR COALESCE(ts_rank(c.search_vector, plainto_tsquery('english', $2)), 0) >= $8
               )
             ORDER BY combined_score DESC
             LIMIT $6
@@ -178,6 +198,8 @@ internal static class IndexSearchEngine
         cmd.Parameters.Add(new NpgsqlParameter { Value = VectorWeight });
         cmd.Parameters.Add(new NpgsqlParameter { Value = KeywordWeight });
         cmd.Parameters.Add(new NpgsqlParameter { Value = limit });
+        cmd.Parameters.Add(new NpgsqlParameter { Value = MinVectorScore });
+        cmd.Parameters.Add(new NpgsqlParameter { Value = MinKeywordScore });
 
         var results = new List<SearchResult>();
 
